@@ -1,0 +1,1 @@
+@include('errors.page', ['code' => 403, 'heading' => 'Akses ditolak', 'message' => 'Anda tidak memiliki izin untuk membuka halaman atau menjalankan aksi ini. Hubungi System Admin bila Anda merasa seharusnya punya akses.'])

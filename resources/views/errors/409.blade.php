@@ -1,0 +1,1 @@
+@include('errors.page', ['code' => 409, 'heading' => 'Data sudah berubah', 'message' => 'Data diubah oleh orang lain atau aksi ini sudah diproses sebelumnya. Muat ulang halaman untuk melihat kondisi terbaru.'])

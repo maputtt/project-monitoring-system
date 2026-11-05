@@ -1,0 +1,149 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Warna brand (sama dengan public/images/logo.svg) */
+    --color-brand-blue: #223f92;
+    --color-brand-blue-dark: #1b3277;
+    --color-brand-blue-soft: #eef2fb;
+    --color-brand-orange: #f8991c;
+    /* Navy pekat untuk sidebar dan panel merek; kanvas halaman bernuansa biru sangat muda. */
+    --color-brand-navy: #0f1a45;
+    --color-brand-canvas: #f4f6fb;
+    /* Garis kontrol formulir: 3.38:1 terhadap putih (WCAG 1.4.11 butuh 3:1). */
+    --color-brand-line: #7d8da3;
+    /* Bayangan berlapis: tepi tipis lalu bayangan lembut yang jauh. */
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+    --shadow-pop: 0 2px 4px rgb(15 23 42 / 0.05), 0 24px 48px -16px rgb(15 23 42 / 0.3);
+    --animate-pop: pop 0.18s ease-out;
+    --animate-fade: fade 0.2s ease-out;
+
+    @keyframes fade {
+        from {
+            opacity: 0;
+        }
+    }
+
+    @keyframes pop {
+        from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.98);
+        }
+    }
+}
+
+@layer base {
+    h1 {
+        @apply text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.75rem];
+    }
+    h2 {
+        @apply text-base font-semibold tracking-tight text-slate-900;
+    }
+    /* Hormati pengaturan "kurangi gerakan" di perangkat. */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+}
+
+/* Kelas bersama untuk semua halaman. Komponen Blade memakainya; jangan menyalin daftar utility ke tiap view. */
+@layer components {
+    .card {
+        @apply rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card sm:p-6;
+    }
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium whitespace-nowrap text-slate-700 shadow-xs transition duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 focus-visible:outline-none active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white;
+    }
+    .btn-primary {
+        @apply border-transparent bg-linear-to-b from-brand-blue to-brand-blue-dark text-white shadow-md shadow-brand-blue/25 hover:border-transparent hover:from-brand-blue-dark hover:to-brand-navy hover:text-white disabled:hover:from-brand-blue disabled:hover:to-brand-blue-dark;
+    }
+    .btn-warn {
+        @apply border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900 disabled:hover:bg-amber-50;
+    }
+    /* Tombol di dalam baris tabel dibuat ringkas. */
+    .td .btn {
+        @apply px-3 py-1.5 text-[13px];
+    }
+    .lbl {
+        @apply block text-sm font-medium text-slate-700;
+    }
+    .inp {
+        @apply mt-1.5 block w-full rounded-xl border border-brand-line bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-500 hover:border-slate-500 focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/15 focus:outline-none user-invalid:border-rose-400 user-invalid:focus:ring-rose-100;
+    }
+    /* Panah dropdown sendiri supaya selaras di semua browser. */
+    select.inp {
+        @apply appearance-none bg-[length:1rem] bg-[position:right_0.875rem_center] bg-no-repeat pr-10;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    }
+    /* Petunjuk di bawah isian. */
+    .hint {
+        @apply mt-1.5 block text-xs font-normal text-slate-600;
+    }
+    /* Pil status: titik kecil mengikuti warna teks. Warna nada diberikan lewat utility (lihat status-badge). */
+    .badge {
+        @apply inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-slate-700 ring-1 ring-slate-500/15 ring-inset before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-current;
+    }
+    .th {
+        @apply border-b border-slate-200 bg-slate-50/60 px-5 py-3 text-left text-[11px] font-semibold tracking-wider whitespace-nowrap text-slate-500 uppercase;
+    }
+    .td {
+        @apply px-5 py-3.5 align-middle text-sm text-slate-700;
+    }
+    .num {
+        @apply text-right tabular-nums;
+    }
+    tbody tr {
+        @apply transition-colors;
+    }
+    tbody tr:hover:not(:has(.empty)) {
+        @apply bg-brand-blue-soft/60;
+    }
+    /* Kartu tabel: bayangan di tepi menandakan masih ada kolom yang bisa digeser di ponsel. */
+    .table-card {
+        @apply overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-card;
+        background:
+            linear-gradient(to right, #fff 30%, transparent) left / 2rem 100% no-repeat local,
+            linear-gradient(to left, #fff 30%, transparent) right / 2rem 100% no-repeat local,
+            linear-gradient(to right, rgb(15 23 42 / 0.14), transparent) left / 0.75rem 100% no-repeat scroll,
+            linear-gradient(to left, rgb(15 23 42 / 0.14), transparent) right / 0.75rem 100% no-repeat scroll, #fff;
+    }
+    /* Pesan tetap terlihat saat tabel digeser di ponsel. */
+    .empty-msg {
+        @apply sticky left-0 w-[calc(100vw-4.5rem)] max-w-md md:mx-auto md:w-auto;
+    }
+    /* Baris kosong pada tabel: satu pesan di tengah. */
+    .empty {
+        @apply px-4 py-14 text-center text-sm text-slate-500;
+    }
+    /* Judul halaman: judul di kiri, pencarian, lalu aksi utama di kanan (ml-auto). */
+    .page-head {
+        @apply mb-6 flex flex-wrap items-center gap-3;
+    }
+    /* Penutup formulir: pita tipis yang menempel di dasar kartu. */
+    .form-actions {
+        @apply -mx-5 mt-2 -mb-5 flex gap-3 rounded-b-2xl border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:-mx-6 sm:-mb-6 sm:px-6;
+    }
+    /* Item sidebar gelap; item aktif berupa pil terang dengan garis oranye di kiri. */
+    .nav-item {
+        @apply relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/8 hover:text-white focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:outline-none;
+    }
+    .nav-item[aria-current='page'] {
+        @apply bg-white/12 font-semibold text-white before:absolute before:top-1/2 before:left-0 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-brand-orange;
+    }
+    .nav-item[aria-current='page'] svg {
+        @apply text-brand-orange;
+    }
+}
+
+[x-cloak] {
+    display: none !important;
+}
