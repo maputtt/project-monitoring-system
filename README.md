@@ -59,7 +59,7 @@ Laravel 13, PHP 8.4, MySQL 8, Blade, Alpine.js, Tailwind CSS v4, Vite. A server-
 Requirements: PHP 8.3+ (developed on 8.4) with BCMath, Composer, Node.js and npm, MySQL 8.
 
 ```bash
-git clone <this-repo-url> project-monitoring-system
+git clone https://github.com/maputtt/project-monitoring-system.git
 cd project-monitoring-system
 composer install
 npm install
