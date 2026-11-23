@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-// QA independen "Paket 1": batas tengah malam WIB vs UTC, matriks status overdue, label Indonesia tanpa teks enum mentah, alur 409 adjustment.
+// QA independen "Paket 1" (keputusan GM 2026-10-20): batas tengah malam WIB vs UTC, matriks status overdue, label Indonesia tanpa teks enum mentah, alur 409 adjustment.
 class PaketSatuQaTest extends TestCase
 {
     use RefreshDatabase;

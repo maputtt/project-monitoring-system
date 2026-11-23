@@ -6,7 +6,7 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
-    /* Warna brand (sama dengan public/images/logo.svg) */
+    /* Warna brand dari public/images/logo.svg */
     --color-brand-blue: #223f92;
     --color-brand-blue-dark: #1b3277;
     --color-brand-blue-soft: #eef2fb;
@@ -59,6 +59,13 @@
 @layer components {
     .card {
         @apply rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card sm:p-6;
+    }
+    /* Judul seksi dashboard (lihat components/section-heading). */
+    .section-heading {
+        @apply inline-flex max-w-full items-center gap-2.5 rounded-full bg-brand-blue-soft py-1 pr-4 pl-1 text-sm font-semibold text-brand-navy ring-1 ring-brand-blue/15 ring-inset sm:text-base;
+    }
+    .section-heading-icon {
+        @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-blue text-white shadow-xs;
     }
     .btn {
         @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium whitespace-nowrap text-slate-700 shadow-xs transition duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 focus-visible:outline-none active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white;

@@ -18,8 +18,8 @@ return new class extends Migration
             throw new RuntimeException("Migrasi dihentikan: {$bad} baris bq_budget_mutations tanpa tujuan atau dengan sumber = tujuan. Perbaiki data dahulu.");
         }
 
-        DB::statement('ALTER TABLE bq_budget_mutations DROP CHECK chk_mutations_type');
-        DB::statement('ALTER TABLE bq_budget_mutations DROP CHECK chk_mutations_source');
+        DB::statement('ALTER TABLE bq_budget_mutations DROP CONSTRAINT chk_mutations_type');
+        DB::statement('ALTER TABLE bq_budget_mutations DROP CONSTRAINT chk_mutations_source');
         Schema::table('bq_budget_mutations', function (Blueprint $table) {
             $table->dropForeign(['destination_bq_id']);
         });
@@ -39,8 +39,8 @@ return new class extends Migration
             throw new RuntimeException('Rollback ditolak: masih ada mutasi RETURN_TO_UNALLOCATED_RAB (riwayat finansial, tidak boleh dihapus).');
         }
 
-        DB::statement('ALTER TABLE bq_budget_mutations DROP CHECK chk_mutations_type');
-        DB::statement('ALTER TABLE bq_budget_mutations DROP CHECK chk_mutations_source');
+        DB::statement('ALTER TABLE bq_budget_mutations DROP CONSTRAINT chk_mutations_type');
+        DB::statement('ALTER TABLE bq_budget_mutations DROP CONSTRAINT chk_mutations_source');
         Schema::table('bq_budget_mutations', function (Blueprint $table) {
             $table->dropForeign(['destination_bq_id']);
         });

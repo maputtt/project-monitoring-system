@@ -118,7 +118,7 @@ class InvoiceUnlockTest extends TestCase
     {
         $this->post("/invoices/{$this->paid}/unlock", ['reason' => 'x'])->assertRedirect('/login');
         foreach ([
-            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('MANAGER_GM', 'CP')->create(), 404], [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
         ] as [$user, $code]) {
             $this->unlock($user)->assertStatus($code);
@@ -179,7 +179,7 @@ class InvoiceUnlockTest extends TestCase
         $html = $this->actingAs($this->manager)->get($page)->assertOk()->getContent();
         $this->assertStringContainsString("invoices/{$this->paid}/unlock", $html);
         $this->assertStringNotContainsString("invoices/$open/unlock", $html);
-        foreach ([$this->staff, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        foreach ([$this->staff, User::factory()->role('DIREKSI', null)->create()] as $user) {
             $this->assertStringNotContainsString('/unlock', $this->actingAs($user)->get($page)->assertOk()->getContent(), $user->role->value);
         }
 

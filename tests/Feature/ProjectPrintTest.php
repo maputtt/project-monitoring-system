@@ -51,10 +51,13 @@ class ProjectPrintTest extends TestCase
             $this->actingAs($user)->get(route('projects.show', $project))->assertNotFound();
             $this->actingAs($user)->get(route('projects.print', $project))->assertNotFound();
         }
-        foreach ([User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create()] as $reader) {
+        foreach ([User::factory()->role('DIREKSI', null)->create()] as $reader) {
             $this->actingAs($reader)->get(route('projects.show', $project))->assertOk();
             $this->actingAs($reader)->get(route('projects.print', $project))->assertOk();
         }
+        $admin = User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create();
+        $this->actingAs($admin)->get(route('projects.show', $project))->assertNotFound();
+        $this->actingAs($admin)->get(route('projects.print', $project))->assertNotFound();
         auth()->logout();
         $this->get(route('projects.print', $project))->assertRedirect('/login');
     }

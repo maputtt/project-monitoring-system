@@ -92,6 +92,20 @@ class RevisiCC2C4QaTest extends TestCase
         return $parts;
     }
 
+    /** DPP per termin oleh oracle: INCLUSIVE = bagian bruto / 1,11 dan termin terakhir menyerap selisih kumulatif (PM 2026-11-19); lainnya DPP = bagian nilai SPK. */
+    private function dppShares(string $mode, string $contract, array $pcts): array
+    {
+        $shares = $this->alloc($contract, $pcts);
+        if ($mode !== 'INCLUSIVE_PPN') {
+            return $shares;
+        }
+        $dpps = array_map(fn ($g) => $this->half(bcdiv($g, '1.11', 10)), $shares);
+        $last = array_key_last($dpps);
+        $dpps[$last] = bcsub($this->half(bcdiv($contract, '1.11', 10)), array_reduce(array_slice($dpps, 0, $last), fn ($c, $x) => bcadd($c, $x, 2), '0.00'), 2);
+
+        return $dpps;
+    }
+
     private function make(string $mode, string $contract, array $pcts, array $statuses): void
     {
         $attrs = match ($mode) {
@@ -104,8 +118,7 @@ class RevisiCC2C4QaTest extends TestCase
         ]);
         $base = $attrs['margin_base_amount'];
         $amounts = $this->alloc($base, $pcts);
-        $dppTotal = $mode === 'INCLUSIVE_PPN' ? $this->half(bcdiv($contract, '1.11', 10)) : $contract;
-        $dpps = $this->alloc($dppTotal, $pcts);
+        $dpps = $this->dppShares($mode, $contract, $pcts);
         $this->termins = [];
         foreach ($pcts as $i => $p) {
             $status = $statuses[$i + 1] ?? 'PLANNED';
@@ -260,7 +273,8 @@ class RevisiCC2C4QaTest extends TestCase
                 'invoice_number' => "NEW-$it", 'billing_date' => '2026-08-20', 'due_date' => '2026-12-31', 'pph_qualification' => 'B', 'version' => (int) $after[$first - 1]['version'],
                 'file' => UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf'),
             ])->assertSessionHasNoErrors();
-            $this->assertSame($this->alloc($dppTotal, $newPcts)[$first - 1], DB::table('invoices')->where('id', $this->termins[$first])->value('dpp_amount'), "$label: DPP invoice setelah koreksi");
+            $expectedDpp = $this->dppShares($mode, $contract, $newPcts)[$first - 1];
+            $this->assertSame($expectedDpp, DB::table('invoices')->where('id', $this->termins[$first])->value('dpp_amount'), "$label: DPP invoice setelah koreksi");
 
             // bersihkan project ini supaya iterasi berikutnya tidak saling mengganggu
             DB::table('project_user_assignments')->where('project_id', $this->project->id)->update(['is_active' => false]);

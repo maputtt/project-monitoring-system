@@ -75,6 +75,17 @@ class MoneyTest extends TestCase
         $this->assertSame('0.0000', Money::ratioPct('0.00', '0.00')); // tanpa pembagian nol
     }
 
+    public function test_average_pct_is_a_simple_average_half_up_away_from_zero_and_skips_empty_bases(): void
+    {
+        $row = fn ($amount, $base) => (object) ['a' => $amount, 'b' => $base];
+        $this->assertSame('2.50', Money::averagePct([$row('10.00', '100.00'), $row('-5.00', '100.00'), $row('9.00', '0.00'), $row('9.00', null)], 'a', 'b')); // 10 dan -5; dasar nol/null dikeluarkan
+        $this->assertSame('0.01', Money::averagePct([$row('1.00', '10000.00'), $row('0.00', '10000.00')], 'a', 'b')); // (0,01 + 0)/2 = 0,005 naik
+        $this->assertSame('-0.01', Money::averagePct([$row('-1.00', '10000.00'), $row('0.00', '10000.00')], 'a', 'b')); // -0,005 menjauhi nol
+        $this->assertSame('0.13', Money::averagePct([$row('1.00', '800.00')], 'a', 'b')); // persen per baris dibulatkan dulu (0,125 -> 0,13), sama dengan kolom daftar
+        $this->assertSame('0.00', Money::averagePct([], 'a', 'b'));
+        $this->assertSame('0.00', Money::averagePct([$row('5.00', '0.00')], 'a', 'b'));
+    }
+
     public function test_keeps_precision_beyond_float_range(): void
     {
         $this->assertSame('9999999999999999.99', Money::add('9999999999999999.98', '0.01'));

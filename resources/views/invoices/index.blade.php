@@ -8,7 +8,7 @@
         <h1>Finance &amp; Invoicing</h1>
     </div>
 
-    <form method="GET" action="{{ route('invoices.index') }}" @class(['card mb-6 grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:items-end', 'xl:grid-cols-[14rem_10rem_10rem_minmax(0,1fr)_auto]' => ! $departments, 'xl:grid-cols-[14rem_9rem_10rem_10rem_minmax(0,1fr)_auto]' => $departments])>
+    <form method="GET" action="{{ route('invoices.index') }}" @class(['card mb-6 grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:items-end xl:justify-start', 'xl:grid-cols-[14rem_10rem_10rem_auto]' => ! $departments, 'xl:grid-cols-[14rem_9rem_10rem_10rem_auto]' => $departments])>
         <label class="lbl">Status
             <select name="status" class="inp">
                 <option value="">Semua status</option>
@@ -36,7 +36,7 @@
             <input type="date" name="due_to" value="{{ $filters['due_to'] ?? '' }}" class="inp">
             @error('due_to')<span class="text-xs text-rose-700">{{ $message }}</span>@enderror
         </label>
-        <div class="flex flex-wrap gap-x-4 gap-y-2 sm:col-span-2 sm:pb-2 xl:col-span-1">
+        <div class="flex flex-wrap gap-x-4 gap-y-2 sm:col-span-2 sm:pb-2 xl:order-last xl:col-span-full xl:pb-0">
         <label class="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" name="overdue" value="1" @checked(! empty($filters['overdue']))> Lewat jatuh tempo
         </label>

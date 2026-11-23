@@ -50,7 +50,7 @@ class DashboardQaTest extends TestCase
 
     public function test_kpis_match_hand_calculation_for_every_status_and_float_traps(): void
     {
-        // Jebakan float: 0.10+0.20 dan nilai 14 digit. Aturan 6A: hanya ACTIVE/COMPLETED/FINANCIALLY_CLOSED/ARCHIVED yang masuk angka uang; DRAFT/SUBMITTED/CANCELLED tidak.
+        // Jebakan float: 0.10+0.20 dan nilai 14 digit. Keputusan 6A: hanya ACTIVE/COMPLETED/FINANCIALLY_CLOSED/ARCHIVED yang masuk angka uang; DRAFT/SUBMITTED/CANCELLED tidak.
         $p1 = Project::factory()->active()->create(['project_code' => 'QA-1', 'status' => 'ACTIVE', 'contract_value' => '0.10', 'effective_rab' => '0.07', 'target_margin_amount' => '0.01']);
         $p2 = Project::factory()->create(['project_code' => 'QA-2', 'status' => 'SUBMITTED', 'contract_value' => '0.20', 'effective_rab' => '0.07', 'target_margin_amount' => '0.02']);
         Project::factory()->create(['project_code' => 'QA-3', 'status' => 'DRAFT', 'contract_value' => '9999999999999.99', 'effective_rab' => '0.01', 'target_margin_amount' => '0.03']);
@@ -63,7 +63,7 @@ class DashboardQaTest extends TestCase
             ['PAID', '64.64', '60.01'], ['CANCELLED', '128.28', '0.99']] as $i => [$status, $subtotal, $net]) {
             $this->invoice($p1, $i + 1, $status, $subtotal, $net);
         }
-        $this->invoice($p2, 1, 'PAID', '0.10', '0.20'); // project SUBMITTED: tidak masuk nett
+        $this->invoice($p2, 1, 'PAID', '0.10', '0.20'); // project SUBMITTED: tidak masuk KPI
 
         // BQ: enam status, semuanya overbudget; ARCHIVED tidak dihitung -> 5. Satu non-overbudget SUBMITTED hanya menambah pending.
         $mutationBq = 0;
@@ -80,10 +80,10 @@ class DashboardQaTest extends TestCase
         }
 
         // pending = project SUBMITTED (1) + bq SUBMITTED (2) + invoice INVOICE_SUBMITTED/PAYMENT_SUBMITTED (2) + adjustment (2) + mutasi (1) = 8
-        $expected = ['activated' => 2, 'projects' => 1, 'completed' => 1, 'contract' => '10000000000000.30', 'rab' => '0.15', 'margin' => '0.06', 'margin_pct' => '0.00', 'outstanding' => '63.63', 'nett' => '60.01', 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 5, 'pending' => 8];
+        $expected = ['activated' => 2, 'projects' => 1, 'completed' => 1, 'open_count' => 2, 'contract' => '10000000000000.30', 'closed_contract' => '0.00', 'rab_changed' => 2, 'margin' => '0.06', 'margin_pct' => '0.00', 'outstanding_count' => 6, 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 5, 'pending' => 8];
         $this->assertSame($expected, $this->kpi($this->manager));
         $this->assertSame($expected, $this->kpi(User::factory()->role('DIREKSI', null)->create()));
-        $this->actingAs($this->manager)->get('/dashboard')->assertSee('Rp10.000.000.000.000,30', false)->assertSee('Rp63,63', false)->assertSee('Rp60,01', false);
+        $this->actingAs($this->manager)->get('/dashboard')->assertSee('Rp10.000.000.000.000,30', false)->assertSee('Rp63,63', false);
     }
 
     public function test_staff_never_sees_unassigned_deactivated_or_foreign_division_numbers(): void
@@ -99,7 +99,7 @@ class DashboardQaTest extends TestCase
             $this->bq($project, 'SUBMITTED', true);
         }
 
-        $expected = ['activated' => 1, 'projects' => 1, 'completed' => 0, 'contract' => '100.00', 'rab' => '10.00', 'margin' => '1.00', 'margin_pct' => '0.00', 'outstanding' => '100.00', 'nett' => '1.00', 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 1, 'pending' => 2];
+        $expected = ['activated' => 1, 'projects' => 1, 'completed' => 0, 'open_count' => 1, 'contract' => '100.00', 'closed_contract' => '0.00', 'rab_changed' => 1, 'margin' => '1.00', 'margin_pct' => '0.00', 'outstanding_count' => 1, 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 1, 'pending' => 2];
         foreach (['', '?department=CP', '?department=BM', '?department=XX', '?department[]=CP', '?department='] as $query) {
             $this->assertSame($expected, $this->kpi($this->staff, $query), $query);
             $this->actingAs($this->staff)->get('/dashboard'.$query)->assertSee('Rp100,00')
@@ -125,7 +125,7 @@ class DashboardQaTest extends TestCase
     {
         Project::factory()->active()->create(['project_code' => 'QA-BM', 'contract_value' => '1.00']);
         Project::factory()->active()->create(['project_code' => 'QA-ITBS', 'department' => 'ITBS', 'contract_value' => '2.00']);
-        foreach ([User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        foreach ([User::factory()->role('DIREKSI', null)->create()] as $user) {
             foreach (['?department=XX', '?department=bm', '?department[]=BM', '?department[a]=BM', '?department=%27%20OR%201=1--', '?department=9999999999999999999999'] as $query) {
                 $this->actingAs($user)->get('/dashboard'.$query)->assertStatus(302)->assertSessionHasErrors('department');
             }
@@ -157,7 +157,7 @@ class DashboardQaTest extends TestCase
         $this->bq($project, 'SUBMITTED', true);
         $users = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
         foreach ($users as $user) {
-            $html = $this->actingAs($user)->get('/dashboard')->assertOk()->getContent();
+            $html = preg_replace('#href="[^"]*/support-tickets/create[^"]*"#', '', $this->actingAs($user)->get('/dashboard')->assertOk()->getContent()); // tautan Laporkan Masalah di menu akun bukan formulir dashboard
             $main = $html;
             // Satu-satunya <form> yang boleh ada adalah logout dari layout.
             preg_match_all('/<form\b[^>]*>/i', $main, $forms);
@@ -178,13 +178,27 @@ class DashboardQaTest extends TestCase
         }
     }
 
-    public function test_system_admin_sees_data_and_drilldown_links_but_no_action_menu(): void
+    public function test_system_admin_gets_only_the_admin_dashboard_and_no_project_or_audit_access(): void
     {
         $project = Project::factory()->active()->create(['project_code' => 'QA-ADM', 'contract_value' => '77.00']);
         $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
-        $response = $this->actingAs($admin)->get('/dashboard')->assertOk()->assertSee('Rp77,00')->assertSee('href="'.route('dashboard.projects', 'activated').'"', false);
-        $response->assertDontSee('href="'.url('/projects').'"', false)->assertDontSee('href="'.url('/invoices').'"', false)->assertDontSee('href="'.url('/approvals').'"', false)->assertDontSee('/invoices');
-        $this->actingAs($admin)->get(route('projects.show', $project->id))->assertOk();
+        $this->actingAs($admin)->get('/dashboard')->assertOk()->assertSee('Dashboard Admin')->assertSee(route('master.users.index'))
+            ->assertDontSee(['Rp77,00', 'QA-ADM', 'Total Nilai Project', 'Margin Realisasi', 'BQ Overbudget', 'Termin belum lunas', 'href="'.route('dashboard.margin').'"'], false);
+        foreach ([route('dashboard.projects', 'open'), route('dashboard.margin'), route('dashboard.overbudget'), route('dashboard.kendala'), '/audit-logs'] as $url) {
+            $this->actingAs($admin)->get($url)->assertForbidden();
+        }
+        foreach (["/projects/{$project->id}", "/projects/{$project->id}/print"] as $url) {
+            $this->actingAs($admin)->get($url)->assertNotFound();
+        }
+        $this->assertSame(['Dashboard', 'Pengguna', 'Tiket'], array_column($admin->role->menu(), 'label'));
+        $this->actingAs($admin)->get('/master/users')->assertOk();
+
+        // Direksi tidak berubah: dashboard penuh, drill-down, audit log.
+        $direksi = User::factory()->role('DIREKSI', null)->create();
+        $this->actingAs($direksi)->get('/dashboard')->assertOk()->assertSee('Total Nilai Project')->assertSee('Rp77,00');
+        $this->actingAs($direksi)->get(route('dashboard.margin'))->assertOk();
+        $this->actingAs($direksi)->get('/audit-logs')->assertOk();
+        $this->actingAs($direksi)->get("/projects/{$project->id}")->assertOk();
     }
 
     public function test_project_names_are_escaped_and_every_status_renders(): void
@@ -193,7 +207,7 @@ class DashboardQaTest extends TestCase
         foreach (ProjectStatus::cases() as $status) {
             Project::factory()->create(['project_code' => 'QA-S'.(++$i), 'status' => $status->value, 'project_name' => '<script>alert('.$i.')</script>"\'&']);
         }
-        foreach ([$this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        foreach ([$this->manager, User::factory()->role('DIREKSI', null)->create()] as $user) {
             $response = $this->actingAs($user)->get('/dashboard')->assertOk();
             $this->assertSame(4, $response->viewData('kpi')['activated']); // 6A: DRAFT, SUBMITTED, CANCELLED tidak dihitung
             $this->assertStringNotContainsString('<script>alert(', $response->getContent());

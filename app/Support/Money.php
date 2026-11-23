@@ -56,6 +56,27 @@ final class Money
         return bcadd((string) $pct, '0', $scale);
     }
 
+    /**
+     * Rata-rata biasa persen per project: tiap baris = ratioPct(amount, base, 2) (sama dengan kolom persen di daftar), lalu Σ ÷ jumlah, half-up 2 desimal.
+     * Baris dengan base nol/null dikeluarkan dari pembilang dan penyebut; tanpa baris layak hasilnya "0.00".
+     *
+     * @param  iterable<object>  $rows
+     */
+    public static function averagePct(iterable $rows, string $amount, string $base = 'margin_base_amount'): string
+    {
+        $sum = new Number('0');
+        $count = 0;
+        foreach ($rows as $row) {
+            if ($row->$base === null || self::compare($row->$base, 0) === 0) {
+                continue;
+            }
+            $sum = $sum->add(self::ratioPct($row->$amount, $row->$base, 2));
+            $count++;
+        }
+
+        return $count === 0 ? '0.00' : self::round($sum->div((string) $count, self::INTERMEDIATE_SCALE));
+    }
+
     /** Menambah pajak: net × (1 + rate/100). Dipakai margin base kontrak EXCLUSIVE_PPN. */
     public static function addTax(Number|string|int $net, Number|string|int $ratePct): string
     {

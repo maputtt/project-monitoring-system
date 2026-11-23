@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE project_adjustments DROP CHECK chk_adjustments_type');
+        DB::statement('ALTER TABLE project_adjustments DROP CONSTRAINT chk_adjustments_type');
         DB::statement("ALTER TABLE project_adjustments ADD CONSTRAINT chk_adjustments_type CHECK (adjustment_type IN ('CONTRACT_VALUE','RAB','TARGET_MARGIN','PROJECT_PERIOD','BILLING_PERCENTAGE'))");
     }
 
@@ -18,7 +18,7 @@ return new class extends Migration
             throw new RuntimeException('Rollback ditolak: masih ada penyesuaian BILLING_PERCENTAGE (riwayat finansial, tidak boleh dihapus).');
         }
 
-        DB::statement('ALTER TABLE project_adjustments DROP CHECK chk_adjustments_type');
+        DB::statement('ALTER TABLE project_adjustments DROP CONSTRAINT chk_adjustments_type');
         DB::statement("ALTER TABLE project_adjustments ADD CONSTRAINT chk_adjustments_type CHECK (adjustment_type IN ('CONTRACT_VALUE','RAB','TARGET_MARGIN','PROJECT_PERIOD'))");
     }
 };

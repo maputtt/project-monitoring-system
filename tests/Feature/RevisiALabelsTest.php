@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// Revisi A: Target Margin Awal diturunkan dari angka awal, kartu Nilai Project, dan kolom Sumber dokumen.
+// Revisi GM 2026-10-22 A: Target Margin Awal diturunkan dari angka awal, kartu Nilai Project, dan kolom Sumber dokumen.
 class RevisiALabelsTest extends TestCase
 {
     use RefreshDatabase;

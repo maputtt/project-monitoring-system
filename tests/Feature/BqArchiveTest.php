@@ -10,7 +10,7 @@ use Illuminate\Testing\TestResponse;
 use RuntimeException;
 use Tests\TestCase;
 
-// Arsip item BQ yang ditinggalkan: tanpa hard delete, alasan wajib, tercatat di audit.
+// Arsip item BQ yang ditinggalkan (keputusan user 2026-10-17): tanpa hard delete, alasan wajib, tercatat di audit.
 class BqArchiveTest extends TestCase
 {
     use RefreshDatabase;
@@ -102,7 +102,7 @@ class BqArchiveTest extends TestCase
     {
         $this->post("/bq-items/{$this->draft}/archive", ['reason' => 'x'])->assertRedirect('/login');
         foreach ([
-            [User::factory()->role('MANAGER_GM', 'BM')->create(), 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [User::factory()->role('MANAGER_GM', 'BM')->create(), 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('STAFF_PIC', 'BM')->create(), 404], // satu divisi, tidak ditugaskan: di luar jangkauan
             [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
         ] as [$user, $code]) {

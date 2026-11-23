@@ -100,7 +100,7 @@ class InvoiceSubmitTest extends TestCase
         $row = $this->row($this->inv1);
         $this->assertSame([
             'INVOICE_SUBMITTED', 'INV/BM/2026/078', 'BAPP/014', null, '2026-08-20', '11.0000', '2.6500',
-            '302320544.15', '33255259.86', '335575804.01', '8011494.42', '327564309.59', 2, $this->staff->id,
+            '302320544.14', '33255259.86', '335575804.00', '8011494.42', '327564309.58', 2, $this->staff->id,
         ], [
             $row->workflow_status, $row->invoice_number, $row->bapp_number, $row->bast_number, $row->billing_date, $row->ppn_rate_snapshot, $row->pph_rate_snapshot,
             $row->dpp_amount, $row->ppn_amount, $row->subtotal_amount, $row->pph_amount, $row->net_received_amount, (int) $row->version, (int) $row->submitted_by,
@@ -115,17 +115,17 @@ class InvoiceSubmitTest extends TestCase
         $audit = DB::table('audit_logs')->where('entity_type', 'INVOICE')->sole();
         [$before, $after] = [json_decode($audit->data_before), json_decode($audit->data_after)];
         $this->assertSame(['SUBMIT', $this->inv1, $this->staff->id, 'PLANNED', null], [$audit->action, (int) $audit->entity_id, (int) $audit->user_id, $before->workflow_status, $before->dpp_amount]);
-        $this->assertSame(['INVOICE_SUBMITTED', '302320544.15', '327564309.59', (int) $doc->id], [$after->workflow_status, $after->dpp_amount, $after->net_received_amount, $after->invoice_document_id]);
+        $this->assertSame(['INVOICE_SUBMITTED', '302320544.14', '327564309.58', (int) $doc->id], [$after->workflow_status, $after->dpp_amount, $after->net_received_amount, $after->invoice_document_id]);
     }
 
     public function test_preview_returns_the_api_example_and_stores_nothing(): void
     {
         $url = "/invoices/{$this->inv1}/tax-preview?billing_date=2026-08-20&pph_tax_rate_id={$this->pphA}";
         $this->actingAs($this->staff)->getJson($url)->assertOk()->assertExactJson([
-            'ppn_rate' => '11.0000', 'pph_rate' => '1.7500', 'dpp_amount' => '302320544.15', 'ppn_amount' => '33255259.86',
-            'subtotal_amount' => '335575804.01', 'pph_amount' => '5290609.52', 'net_received_amount' => '330285194.49',
+            'ppn_rate' => '11.0000', 'pph_rate' => '1.7500', 'dpp_amount' => '302320544.14', 'ppn_amount' => '33255259.86',
+            'subtotal_amount' => '335575804.00', 'pph_amount' => '5290609.52', 'net_received_amount' => '330285194.48',
         ]);
-        $this->actingAs($this->staff)->getJson("/invoices/{$this->inv1}/tax-preview?billing_date=2026-08-20&pph_qualification=B")->assertOk()->assertJsonPath('net_received_amount', '327564309.59');
+        $this->actingAs($this->staff)->getJson("/invoices/{$this->inv1}/tax-preview?billing_date=2026-08-20&pph_qualification=B")->assertOk()->assertJsonPath('net_received_amount', '327564309.58');
         $this->untouched($this->inv1);
     }
 
@@ -182,7 +182,7 @@ class InvoiceSubmitTest extends TestCase
         $this->submit($this->inv1)->assertSessionHasNoErrors();
         $this->submit($this->inv2, ['invoice_number' => 'INV/BM/2026/079'])->assertSessionHasNoErrors();
 
-        $this->assertSame(['302320544.15', '302320544.14'], [$this->row($this->inv1)->dpp_amount, $this->row($this->inv2)->dpp_amount]);
+        $this->assertSame(['302320544.14', '302320544.15'], [$this->row($this->inv1)->dpp_amount, $this->row($this->inv2)->dpp_amount]);
         $this->assertSame('604641088.29', bcadd($this->row($this->inv1)->dpp_amount, $this->row($this->inv2)->dpp_amount, 2));
     }
 
@@ -286,7 +286,7 @@ class InvoiceSubmitTest extends TestCase
         $blocked = [
             [User::factory()->role('MANAGER_GM', 'BM')->create(), 403],
             [User::factory()->role('DIREKSI', null)->create(), 403],
-            [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('STAFF_PIC', 'BM')->create(), 404], // tidak ditugaskan
             [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
             [User::factory()->role('MANAGER_GM', 'CP')->create(), 404],
@@ -354,7 +354,7 @@ class InvoiceSubmitTest extends TestCase
         $this->assertSame('2026-10-02', $this->row($this->inv1)->due_date);
 
         $row = $this->row($this->inv1);
-        $this->assertSame(['INVOICE_SUBMITTED', 'INV/BM/2026/078-R', '1.7500', '5290609.52', '330285194.49', 3],
+        $this->assertSame(['INVOICE_SUBMITTED', 'INV/BM/2026/078-R', '1.7500', '5290609.52', '330285194.48', 3],
             [$row->workflow_status, $row->invoice_number, $row->pph_rate_snapshot, $row->pph_amount, $row->net_received_amount, (int) $row->version]);
 
         $docs = DB::table('documents')->where('entity_id', $this->inv1)->orderBy('id')->get();
@@ -386,7 +386,7 @@ class InvoiceSubmitTest extends TestCase
         $this->actingAs(User::factory()->role('MANAGER_GM', 'BM')->create())->get($page)->assertOk()->assertDontSee('Ajukan invoice');
 
         $this->submit($this->inv1)->assertSessionHasNoErrors();
-        $this->actingAs($this->staff)->get($page)->assertOk()->assertSee('INV/BM/2026/078')->assertSee('Rp302.320.544,15')->assertSee('Rp327.564.309,59')->assertSee('PPh (2,65%)', false)
+        $this->actingAs($this->staff)->get($page)->assertOk()->assertSee('INV/BM/2026/078')->assertSee('Rp302.320.544,14')->assertSee('Rp327.564.309,58')->assertSee('PPh (2,65%)', false)
             ->assertDontSee('name="_modal" value="invoice-'.$this->inv1.'"', false)->assertSee('name="_modal" value="invoice-'.$this->inv2.'"', false);
 
         DB::table('projects')->where('id', $this->project->id)->update(['status' => 'DRAFT']);

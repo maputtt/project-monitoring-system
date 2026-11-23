@@ -216,11 +216,11 @@ class UserManagementTest extends TestCase
     public function test_sole_usable_pic_of_an_open_project_cannot_leave(string $how, string $field): void
     {
         $sole = $this->pic();
-        $a = Project::factory()->assignedTo($sole)->create(['created_by' => $sole->id]);
-        $b = Project::factory()->assignedTo($sole)->create(['created_by' => $sole->id]);
+        Project::factory()->assignedTo($sole)->create(['created_by' => $sole->id]);
+        Project::factory()->assignedTo($sole)->create(['created_by' => $sole->id]);
         $this->actingAs($this->admin);
 
-        $this->leave($sole, $how)->assertInvalid([$field => "satu-satunya Staff/PIC aktif di project {$a->project_code}, {$b->project_code}. Minta Manager/GM menugaskan pengganti lebih dulu."]);
+        $this->leave($sole, $how)->assertInvalid([$field => "{$sole->name} masih menjadi satu-satunya Staff/PIC di 2 project yang berjalan. Minta Manager/GM divisi BM menugaskan pengganti lebih dulu."]);
         $sole->refresh();
         $this->assertSame([true, Role::STAFF_PIC, Department::BM], [$sole->is_active, $sole->role, $sole->department]);
         $this->assertSame(0, DB::table('audit_logs')->where('entity_id', $sole->id)->count());

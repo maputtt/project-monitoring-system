@@ -71,7 +71,7 @@ class FoundationTest extends TestCase
             ->assertSee('Revisi Invoice'); // badge menampilkan label Indonesia
 
         $this->get('/ui-kit?role=DIREKSI')->assertOk()->assertSee('Audit Log')->assertDontSee('Tarif Pajak');
-        $this->get('/ui-kit?role=SYSTEM_ADMIN')->assertOk()->assertSee('Pengguna')->assertSee('Audit Log')->assertDontSee('Data Master')->assertDontSee('Finance &amp; Invoicing', false);
+        $this->get('/ui-kit?role=SYSTEM_ADMIN')->assertOk()->assertSee('Pengguna')->assertDontSee('Audit Log')->assertDontSee('Data Master')->assertDontSee('Finance &amp; Invoicing', false);
         $this->get('/ui-kit?role=BUKAN_ROLE')->assertOk()->assertSee('Tarif Pajak'); // nilai tak dikenal jatuh ke Staff/PIC
     }
 
@@ -82,5 +82,15 @@ class FoundationTest extends TestCase
 
         $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee('Budi')->assertSee('Manager/GM')->assertSee('Divisi BM')
             ->assertSee('Approvals')->assertSee('Keluar'); // menu mengikuti role user yang login
+    }
+
+    public function test_signed_in_layout_has_the_new_notification_banner_but_guests_do_not(): void
+    {
+        $this->withoutVite();
+        $user = User::factory()->role('MANAGER_GM', 'BM')->create();
+
+        $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee('Ada notifikasi baru.')->assertSee('pms-notification')->assertSee('Muat ulang');
+        auth()->logout();
+        $this->get('/login')->assertOk()->assertDontSee('Ada notifikasi baru.');
     }
 }

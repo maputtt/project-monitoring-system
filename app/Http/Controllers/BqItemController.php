@@ -151,7 +151,7 @@ class BqItemController extends Controller
     }
 
     /**
-     * Nilai turunan (PRD 5.3; basis margin = effective budget). Sebelum ada mutasi, effective_budget = baseline_budget.
+     * Nilai turunan (PRD 5.3; basis margin = effective budget, keputusan kerja BQ-01). Sebelum ada mutasi, effective_budget = baseline_budget.
      *
      * @return array<string, string|bool>
      */

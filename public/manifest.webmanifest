@@ -1,0 +1,13 @@
+{
+    "name": "Project Monitoring System",
+    "short_name": "PMS",
+    "description": "Project Monitoring System - portfolio demo",
+    "start_url": "/dashboard",
+    "scope": "/",
+    "display": "standalone",
+    "theme_color": "#0f1a45",
+    "background_color": "#f4f6fb",
+    "icons": [
+        { "src": "/images/logo-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ]
+}

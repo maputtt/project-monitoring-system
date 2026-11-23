@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// status tampil berbahasa Indonesia (nilai enum tetap untuk filter/API) dan waktu tampil WIB (penyimpanan UTC).
+// Keputusan GM 2026-10-20: status tampil berbahasa Indonesia (nilai enum tetap untuk filter/API) dan waktu tampil WIB (penyimpanan UTC).
 class IndonesianDisplayTest extends TestCase
 {
     use RefreshDatabase;

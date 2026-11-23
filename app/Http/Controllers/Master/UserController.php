@@ -52,7 +52,15 @@ class UserController extends Controller
 
     public function edit(User $user): View
     {
-        return view('master.users.form', ['user' => $user]);
+        return view('master.users.form', ['user' => $user, 'passkeys' => $user->passkeys()->orderBy('id')->get(['id', 'name', 'created_at', 'last_used_at', 'device_expires_at'])]);
+    }
+
+    /** Admin menghapus perangkat Face ID milik user mana pun; HP itu langsung keluar dan tidak bisa buka kunci. */
+    public function destroyPasskey(User $user, int $id): RedirectResponse
+    {
+        $user->passkeys()->findOrFail($id)->remove();
+
+        return back()->with('status', 'Perangkat dihapus. Pengguna itu keluar dari perangkatnya.');
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse
@@ -97,6 +105,7 @@ class UserController extends Controller
 
             $before = $user->only(self::AUDITED);
             $user->update(['is_active' => $active]);
+            $active || $user->passkeys()->update(['device_token_hash' => null, 'device_expires_at' => null]); // aktif kembali tidak menghidupkan login HP lama
             Audit::record(AuditAction::UPDATE, 'USER', $user->id, $before, $user->only(self::AUDITED));
         });
 
@@ -104,7 +113,7 @@ class UserController extends Controller
     }
 
     /**
-     * Tolak perubahan yang membuat project berjalan tanpa Staff/PIC yang berguna.
+     * Tolak perubahan yang membuat project berjalan tanpa Staff/PIC yang berguna (keputusan user 2026-10-14).
      * Baris project dikunci dulu, lalu dihitung ulang, supaya tidak berbenturan dengan penonaktifan assignment (MST-03).
      */
     private function assertNotSoleStaffPic(User $user, string $field): void
@@ -115,13 +124,14 @@ class UserController extends Controller
 
         // Daftar id boleh basi; yang menentukan adalah locking read berikutnya (tanpa subquery, supaya membaca baris terbaru, bukan snapshot).
         $ids = DB::table('project_user_assignments')->where('user_id', $user->id)->where('is_active', true)->pluck('project_id');
-        $codes = Project::query()->open()->where('department', $user->department)->whereIn('id', $ids)
+        $sole = Project::query()->open()->where('department', $user->department)->whereIn('id', $ids)
             ->orderBy('id')->lockForUpdate()->get()
-            ->filter(fn (Project $project) => ! $project->hasOtherUsablePic($user->id))
-            ->pluck('project_code');
+            ->filter(fn (Project $project) => ! $project->hasOtherUsablePic($user->id));
 
-        if ($codes->isNotEmpty()) {
-            throw ValidationException::withMessages([$field => 'Pengguna ini satu-satunya Staff/PIC aktif di project '.$codes->implode(', ').'. Minta Manager/GM menugaskan pengganti lebih dulu.']);
+        if ($sole->isNotEmpty()) {
+            // Pesan sampai ke System Admin, yang tidak boleh melihat data project: hanya jumlah dan divisi, tanpa kode.
+            $divisions = $sole->pluck('department')->map->value->unique()->implode(', ');
+            throw ValidationException::withMessages([$field => "{$user->name} masih menjadi satu-satunya Staff/PIC di {$sole->count()} project yang berjalan. Minta Manager/GM divisi {$divisions} menugaskan pengganti lebih dulu."]);
         }
     }
 }

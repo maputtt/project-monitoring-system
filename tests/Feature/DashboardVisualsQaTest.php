@@ -93,8 +93,8 @@ class DashboardVisualsQaTest extends TestCase
         }
         $m->assertSee('-Rp4.927,77', false);
 
-        // DIREKSI/SYSTEM_ADMIN: ?department memfilter satu divisi; angka CP berdiri sendiri.
-        foreach (['DIREKSI', 'SYSTEM_ADMIN'] as $role) {
+        // DIREKSI: ?department memfilter satu divisi; angka CP berdiri sendiri.
+        foreach (['DIREKSI'] as $role) {
             $u = User::factory()->role($role, null)->create();
             $cp = $this->actingAs($u)->get('/dashboard?department=CP')->assertOk();
             $this->assertSame(['rab' => '3000.00', 'committed' => '8888.88', 'pending' => '9999.99', 'available' => '-15888.87'], array_slice($cp->viewData('allocation'), 0, 4));
@@ -186,7 +186,7 @@ class DashboardVisualsQaTest extends TestCase
     public function test_project_names_stay_out_of_aria_labels_and_are_escaped(): void
     {
         Project::factory()->active()->create(['project_code' => 'Q-XSS', 'project_name' => '"><img src=x onerror=alert(1)>', 'effective_rab' => '10.00']);
-        foreach ([$this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $u) {
+        foreach ([$this->manager, User::factory()->role('DIREKSI', null)->create()] as $u) {
             $html = $this->actingAs($u)->get('/dashboard')->assertOk()->getContent();
             $list = $this->actingAs($u)->get(route('dashboard.projects', 'active'))->assertOk()->getContent();
             $this->assertStringNotContainsString('<img src=x', $html.$list);
@@ -203,11 +203,11 @@ class DashboardVisualsQaTest extends TestCase
         $this->scopedFixture();
         $zero = Project::factory()->active()->create(['project_code' => 'Q-Z', 'effective_rab' => '0.00']);
         $this->bq($zero, 'SUBMITTED', 'OPERATIONAL', '0', '5.00');
-        $users = ['STAFF_PIC' => $this->staff, 'MANAGER_GM' => $this->manager, 'DIREKSI' => User::factory()->role('DIREKSI', null)->create(), 'SYSTEM_ADMIN' => User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $users = ['STAFF_PIC' => $this->staff, 'MANAGER_GM' => $this->manager, 'DIREKSI' => User::factory()->role('DIREKSI', null)->create()];
         foreach ($users as $role => $u) {
             foreach (['', '?department=', '?department=BM', '?department=CP', '?department=ITBS', '?department=XX', '?department[]=BM', '?page=999'] as $q) {
                 $status = $this->actingAs($u)->get('/dashboard'.$q)->getStatusCode();
-                $invalid = in_array($q, ['?department=XX', '?department[]=BM'], true) && in_array($role, ['DIREKSI', 'SYSTEM_ADMIN'], true);
+                $invalid = in_array($q, ['?department=XX', '?department[]=BM'], true) && $role === 'DIREKSI';
                 $this->assertSame($invalid ? 302 : 200, $status, "$role $q");
             }
         }

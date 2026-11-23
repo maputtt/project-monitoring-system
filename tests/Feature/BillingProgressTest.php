@@ -156,14 +156,59 @@ class BillingProgressTest extends TestCase
     {
         $id = $this->invoice();
         $this->record($id, ['description' => '<script>alert(1)</script>', 'stage' => 'MEMO'])->assertSessionDoesntHaveErrors();
-        $this->record($id, ['progress_date' => '2026-10-28', 'description' => 'Sudah lengkap', 'stage' => 'INVOICE', 'is_issue' => null]);
+        $this->record($id, ['progress_date' => '2026-10-28', 'description' => 'Sudah lengkap', 'stage' => 'KE_GA', 'is_issue' => null]);
 
         $page = $this->get("/projects/{$this->project->id}")->assertOk();
-        $page->assertSee('Tahap dokumen')->assertSee('Invoice dikirim')->assertSee('Riwayat progres (2)')->assertSee('Memo ke Finance/FAC')
+        $page->assertSee('Tahap dokumen')->assertSee('Tagihan diserahkan ke GA')->assertSee('Riwayat progres (2)')->assertSee('Memo BM ke FAC')
             ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)->assertDontSee('<script>alert(1)</script>', false)->assertSee('Catat progres');
         $this->assertFalse($page->viewData('invoices')->first()->hasIssue); // kendala dibersihkan catatan terbaru
 
         $manager = User::factory()->role('MANAGER_GM', 'BM')->create();
         $this->actingAs($manager)->get("/projects/{$this->project->id}")->assertOk()->assertSee('Riwayat progres (2)')->assertDontSee('Catat progres');
+    }
+
+    public function test_each_new_stage_code_is_accepted(): void
+    {
+        $id = $this->invoice();
+        foreach (['LAMPIRAN', 'MEMO', 'INVOICE_FAC', 'KE_GA', 'TANDA_TERIMA'] as $code) {
+            $this->record($id, ['stage' => $code])->assertSessionDoesntHaveErrors();
+        }
+        $this->assertSame(5, DB::table('project_progress')->where('invoice_id', $id)->count());
+    }
+
+    public function test_retired_invoice_stage_is_rejected_for_new_entries(): void
+    {
+        $id = $this->invoice();
+        $this->record($id, ['stage' => 'INVOICE'])->assertSessionHasErrors('stage', null, "progress-$id");
+        $this->assertSame(0, DB::table('project_progress')->count());
+    }
+
+    public function test_milestone_summary_uses_highest_id_row_and_dash_when_missing(): void
+    {
+        $id = $this->invoice();
+        $this->progressRow($id, '2026-10-20', false, 'MEMO');
+        $this->progressRow($id, '2026-10-10', false, 'MEMO'); // id lebih besar, tanggal lebih awal: koreksi menang
+        $this->progressRow($id, '2026-10-15', false, 'KE_GA');
+
+        $page = $this->actingAs($this->staff)->get("/projects/{$this->project->id}")->assertOk();
+        $page->assertSeeInOrder(['Lampiran tagihan dari cabang', '–', 'Memo BM ke FAC', '10/10/2026', 'Invoice dari FAC diterima BM', '–', 'Tagihan diserahkan ke GA', '15/10/2026', 'Tanda terima klien', '–'])
+            ->assertDontSee('<dd class="whitespace-nowrap font-semibold text-slate-900">20/10/2026</dd>', false);
+    }
+
+    public function test_check_accepts_new_codes_and_migration_down_refuses_when_they_exist(): void
+    {
+        $inv = $this->invoice();
+        $this->progressRow($inv, '2026-10-20', false, 'TANDA_TERIMA'); // CHECK menerima kode baru lewat insert mentah
+
+        $this->expectException(\RuntimeException::class); // refusal dilempar sebelum DDL apa pun
+        (require database_path('migrations/2026_11_16_000001_extend_billing_progress_stages.php'))->down();
+    }
+
+    public function test_legacy_invoice_row_still_labelled_in_history(): void
+    {
+        $id = $this->invoice();
+        $this->progressRow($id, '2026-10-20', false, 'INVOICE');
+
+        $this->actingAs($this->staff)->get("/projects/{$this->project->id}")->assertOk()->assertSee('Invoice dikirim')->assertSee('Riwayat progres (1)');
     }
 }

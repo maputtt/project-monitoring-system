@@ -143,7 +143,7 @@ class InvoiceVerifyQaTest extends TestCase
             $id = $this->invoice($i + 2, $status);
             $status === 'PAID' || DB::table('invoices')->where('id', $id)->update(['revision_reason' => 'r']);
         }
-        $roles = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $roles = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()];
         foreach ($roles as $user) {
             $html = $this->actingAs($user)->get("/projects/{$this->project->id}")->assertOk()->getContent();
             // hanya INVOICE_SUBMITTED yang boleh punya tombol keputusan

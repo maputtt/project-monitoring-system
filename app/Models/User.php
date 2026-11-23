@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -17,6 +18,16 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
+    public function passkeys(): HasMany
+    {
+        return $this->hasMany(Passkey::class);
+    }
 
     // PRD menamai kolomnya password_hash, bukan password bawaan Laravel.
     public function getAuthPasswordName(): string
@@ -35,6 +46,7 @@ class User extends Authenticatable
             'password_hash' => 'hashed',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_seen_at' => 'datetime',
         ];
     }
 }

@@ -108,9 +108,12 @@ class ProjectWorkflowTest extends TestCase
         $direksi = User::factory()->role('DIREKSI', null)->create();
         $admin = User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create();
 
-        $roles([$this->manager, $direksi, $admin], 'submit', 403);
-        $roles([$this->staff, $direksi, $admin], 'activate', 403);
-        $roles([$this->staff, $direksi, $admin], 'request-revision', 403);
+        $roles([$this->manager, $direksi], 'submit', 403);
+        $roles([$this->staff, $direksi], 'activate', 403);
+        $roles([$this->staff, $direksi], 'request-revision', 403);
+        foreach (['submit', 'activate', 'request-revision'] as $path) {
+            $roles([$admin], $path, 404); // admin: project di luar jangkauan
+        }
         $this->assertSame('DRAFT', $this->projectStatus());
 
         // Staff divisi sama tanpa assignment, manajer divisi lain: tidak terlihat.

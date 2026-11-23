@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
+use App\Enums\Department;
 use App\Enums\Role;
 use App\Models\Project;
 use App\Support\AuditSentence;
@@ -29,19 +30,18 @@ class AuditLogController extends Controller
         'PROGRESS' => 'project_progress',
     ];
 
-    /** Bukan project: akun, master, dan tarif. Hanya DIREKSI dan SYSTEM_ADMIN yang melihatnya. Baris LOGIN lama disembunyikan untuk semua peran. */
+    /** Bukan project: akun, master, dan tarif. Hanya DIREKSI yang melihatnya. Baris LOGIN lama disembunyikan untuk semua peran. */
     private const NON_PROJECT = ['USER', 'PKS', 'BOUWHEER_CONTACT', 'TAX_RATE'];
 
     public function index(Request $request): View
     {
         $filters = $request->validate([
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'entity_type' => ['nullable', Rule::in([...array_keys(self::PROJECT_SCOPED), ...self::NON_PROJECT])],
             'action' => ['nullable', Rule::enum(AuditAction::class)->except(AuditAction::LOGIN)], // LOGIN tidak dicatat lagi dan disembunyikan
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
         ], [
-            'user_id.*' => 'Pengguna tidak dikenal.', 'entity_type.*' => 'Entitas tidak dikenal.', 'action.*' => 'Aksi tidak dikenal.',
+            'entity_type.*' => 'Entitas tidak dikenal.', 'action.*' => 'Aksi tidak dikenal.',
             'date_from.*' => 'Tanggal dari tidak valid.', 'date_to.date_format' => 'Tanggal sampai tidak valid.', 'date_to.after_or_equal' => 'Tanggal sampai harus sama atau setelah tanggal dari.',
         ]);
         $user = $request->user();
@@ -50,19 +50,13 @@ class AuditLogController extends Controller
         $from = isset($filters['date_from']) ? Carbon::parse($filters['date_from'], $tz)->startOfDay()->utc() : null;
         $to = isset($filters['date_to']) ? Carbon::parse($filters['date_to'], $tz)->addDay()->startOfDay()->utc() : null;
         $manager = $user->role === Role::MANAGER_GM;
+        $department = DashboardController::department($request); // null untuk peran per-divisi: ?department diabaikan
+        $canPickDepartment = $user->role === Role::DIREKSI;
 
         $logs = DB::table('audit_logs')->leftJoin('users', 'users.id', '=', 'audit_logs.user_id')
             ->where('audit_logs.action', '<>', AuditAction::LOGIN->value) // baris LOGIN lama tetap di database
-            ->when($manager, function ($q) use ($user) {
-                $projects = Project::query()->visibleTo($user)->select('projects.id');
-                $q->where(function ($any) use ($projects) {
-                    foreach (self::PROJECT_SCOPED as $type => $table) {
-                        $any->orWhere(fn ($one) => $one->where('audit_logs.entity_type', $type)->whereIn('audit_logs.entity_id',
-                            $table === null ? $projects : DB::table($table)->whereIn('project_id', $projects)->select('id')));
-                    }
-                });
-            })
-            ->when($filters['user_id'] ?? null, fn ($q, $id) => $q->where('audit_logs.user_id', $id))
+            ->when($manager, fn ($q) => $this->onlyProjectsIn($q, Project::query()->visibleTo($user)->select('projects.id')))
+            ->when($department, fn ($q, $d) => $this->onlyProjectsIn($q, Project::query()->where('projects.department', $d)->select('projects.id'))) // divisi = divisi project baris itu; non-project tereksklusi
             ->when($filters['entity_type'] ?? null, fn ($q, $type) => $q->where('audit_logs.entity_type', $type))
             ->when($filters['action'] ?? null, fn ($q, $action) => $q->where('audit_logs.action', $action))
             ->when($from, fn ($q, $t) => $q->where('audit_logs.created_at', '>=', $t->toDateTimeString()))
@@ -75,11 +69,21 @@ class AuditLogController extends Controller
 
         return view('audit-logs.index', [
             'logs' => $logs,
-            'filters' => $filters,
+            'filters' => $filters + ['department' => $department],
             'actions' => array_filter(AuditAction::cases(), fn ($a) => $a !== AuditAction::LOGIN),
             'entityTypes' => [...array_keys(self::PROJECT_SCOPED), ...self::NON_PROJECT],
-            // Pilihan user mengikuti jangkauan: Manager/GM hanya melihat nama di divisinya.
-            'users' => DB::table('users')->when($manager, fn ($q) => $q->where('department', $user->department->value))->orderBy('name')->get(['id', 'name']),
+            'departments' => $canPickDepartment ? Department::cases() : [],
         ]);
+    }
+
+    /** Batasi baris audit ke entitas terikat project yang project-nya ada di subquery $projects. */
+    private function onlyProjectsIn($q, $projects)
+    {
+        return $q->where(function ($any) use ($projects) {
+            foreach (self::PROJECT_SCOPED as $type => $table) {
+                $any->orWhere(fn ($one) => $one->where('audit_logs.entity_type', $type)->whereIn('audit_logs.entity_id',
+                    $table === null ? $projects : DB::table($table)->whereIn('project_id', $projects)->select('id')));
+            }
+        });
     }
 }

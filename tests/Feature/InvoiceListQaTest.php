@@ -78,7 +78,7 @@ class InvoiceListQaTest extends TestCase
 
     public function test_overdue_boundary_is_exact(): void
     {
-        // setUp: 2026-10-16 23:30 UTC = 17 Okt 06:30 WIB, jadi "hari ini" bisnis adalah 17 Okt.
+        // setUp: 2026-10-16 23:30 UTC = 17 Okt 06:30 WIB, jadi "hari ini" bisnis adalah 17 Okt (keputusan 2).
         $p = Project::factory()->assignedTo($this->staff)->create();
         $this->invoice($p, 1, 'INV/YESTERDAY', 'WAITING_FOR_PAYMENT', '2026-10-16');
         $this->invoice($p, 2, 'INV/TODAY', 'WAITING_FOR_PAYMENT', '2026-10-17');

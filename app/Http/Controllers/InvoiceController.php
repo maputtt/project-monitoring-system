@@ -12,6 +12,7 @@ use App\Models\TaxRate;
 use App\Support\Audit;
 use App\Support\DocumentStore;
 use App\Support\InvoiceTax;
+use App\Support\Notify;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -43,9 +44,16 @@ class InvoiceController extends Controller
 
     /** Tahap dokumen penagihan per termin (progres BILLING): kode => label. */
     public const PROGRESS_STAGES = [
-        'LAMPIRAN' => 'Lampiran/dokumen pendukung', 'BAPP' => 'BAPP', 'BAST' => 'BAST', 'MEMO' => 'Memo ke Finance/FAC',
-        'INVOICE' => 'Invoice dikirim', 'MENUNGGU_BAYAR' => 'Menunggu pembayaran', 'LAINNYA' => 'Lainnya',
+        'LAMPIRAN' => 'Lampiran tagihan dari cabang', 'MEMO' => 'Memo BM ke FAC', 'INVOICE_FAC' => 'Invoice dari FAC diterima BM',
+        'KE_GA' => 'Tagihan diserahkan ke GA', 'TANDA_TERIMA' => 'Tanda terima klien', 'BAPP' => 'BAPP', 'BAST' => 'BAST',
+        'MENUNGGU_BAYAR' => 'Menunggu pembayaran', 'LAINNYA' => 'Lainnya', 'INVOICE' => 'Invoice dikirim',
     ];
+
+    /** Tahap lama yang labelnya tetap tampil di riwayat tetapi tidak bisa dipilih untuk catatan baru. */
+    public const RETIRED_PROGRESS_STAGES = ['INVOICE'];
+
+    /** Lima tonggak tanggal per termin, urut alur; tanggal = baris terbaru (id terbesar) per tahap. */
+    public const BILLING_MILESTONES = ['LAMPIRAN', 'MEMO', 'INVOICE_FAC', 'KE_GA', 'TANDA_TERIMA'];
 
     /**
      * Kendala aktif = progres BILLING terbaru sebuah termin (progress_date, lalu id terbesar) bertanda is_issue dan termin belum PAID/CANCELLED.
@@ -195,6 +203,8 @@ class InvoiceController extends Controller
             return $request->expectsJson() ? response()->json(['message' => $message], 409) : back()->withInput()->withErrors(['version' => $message], $bag);
         }
 
+        Notify::send('awaiting', $project, $user, $project->project_code.': invoice menunggu verifikasi');
+
         return redirect()->route('projects.show', $project)->with('status', 'Invoice diajukan. Menunggu verifikasi Manager/GM.');
     }
 
@@ -255,7 +265,7 @@ class InvoiceController extends Controller
         [$project] = $this->load($request, $invoice);
         $today = now(config('app.local_timezone'))->toDateString();
         $data = $request->validateWithBag("progress-$invoice", [
-            'stage' => ['bail', 'required', 'string', Rule::in(array_keys(self::PROGRESS_STAGES))],
+            'stage' => ['bail', 'required', 'string', Rule::in(array_diff(array_keys(self::PROGRESS_STAGES), self::RETIRED_PROGRESS_STAGES))],
             'progress_date' => ['bail', 'required', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:'.$today],
             'description' => ['bail', 'required', 'string', 'max:1000'],
             'is_issue' => ['nullable', 'boolean'],
@@ -325,6 +335,8 @@ class InvoiceController extends Controller
             $key && Storage::disk(DocumentStore::DISK)->delete($key); // transaksi membatalkan barisnya, berkasnya jangan yatim
             throw $e;
         }
+
+        Notify::send('awaiting', $project, $user, $project->project_code.': bukti bayar menunggu persetujuan');
 
         return redirect()->route('projects.show', $project)->with('status', 'Bukti bayar diajukan. Menunggu persetujuan Manager/GM.');
     }

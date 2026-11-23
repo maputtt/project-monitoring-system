@@ -9,6 +9,7 @@ use App\Exceptions\InvalidTransition;
 use App\Models\Project;
 use App\Support\Audit;
 use App\Support\Money;
+use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -19,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 /** Submit, approve, dan minta revisi item BQ (BQ-02). Hak: contribute untuk submit, approve (Manager/GM) untuk keputusan; status dari peta transisi enum. */
 class BqWorkflowController extends Controller
 {
-    /** Status project yang boleh menjalankan workflow BQ: RAB terkunci sejak aktivasi, jadi bukan DRAFT. */
+    /** Status project yang boleh menjalankan workflow BQ: RAB terkunci sejak aktivasi, jadi bukan DRAFT (keputusan tech-lead 2026-10-15). */
     public const WORKFLOW_PROJECT_STATUSES = [ProjectStatus::ACTIVE, ProjectStatus::COMPLETED];
 
     private const AUDITED = ['status', 'approved_by', 'approved_at', 'version'];
@@ -117,6 +118,12 @@ class BqWorkflowController extends Controller
             Audit::record($action, 'BQ_ITEM', $bq, $before, Arr::only((array) DB::table('bq_items')->where('id', $bq)->first(), self::AUDITED), $reason);
             $warning = $to === BqStatus::SUBMITTED ? $locked->overAllocationWarning() : null; // hanya saat staff mengajukan
         });
+
+        match ($to) {
+            BqStatus::SUBMITTED => Notify::send('awaiting', $project, $user, $project->project_code.': item BQ menunggu persetujuan'),
+            BqStatus::APPROVED => Notify::send('decided', $project, $user, $project->project_code.': item BQ disetujui'),
+            default => Notify::send('decided', $project, $user, $project->project_code.': item BQ perlu revisi'),
+        };
 
         return redirect()->route('projects.show', $project)->with('status', $message)->with('warning', $warning);
     }

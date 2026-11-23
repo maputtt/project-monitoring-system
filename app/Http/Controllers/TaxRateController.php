@@ -58,7 +58,7 @@ class TaxRateController extends Controller
 
     private function validated(Request $request): array
     {
-        // Versi tarif tidak bisa diubah atau dihapus, jadi salah ketik tahun jauh ke depan akan memblokir versi benar selamanya.
+        // Versi tarif tidak bisa diubah atau dihapus, jadi salah ketik tahun jauh ke depan akan memblokir versi benar selamanya (keputusan user 2026-10-14).
         $latest = now(config('app.local_timezone'))->startOfDay()->addYearNoOverflow();
 
         return $request->validate([

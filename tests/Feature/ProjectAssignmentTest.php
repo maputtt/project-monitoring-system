@@ -69,7 +69,7 @@ class ProjectAssignmentTest extends TestCase
     public function test_only_manager_of_the_division_can_assign(): void
     {
         $this->assign(User::factory()->role('DIREKSI', null)->create(), $this->other)->assertForbidden();
-        $this->assign(User::factory()->role('SYSTEM_ADMIN', null)->create(), $this->other)->assertForbidden();
+        $this->assign(User::factory()->role('SYSTEM_ADMIN', null)->create(), $this->other)->assertNotFound(); // admin: project di luar jangkauan
         // Staff yang ditugaskan di project itu melihatnya tetapi tetap tidak boleh mengelola tim.
         $this->assign($this->staff, $this->other)->assertForbidden();
         $this->assign($this->other, $this->other)->assertNotFound(); // staff lain tidak melihat project
@@ -172,7 +172,7 @@ class ProjectAssignmentTest extends TestCase
 
         $this->actingAs($this->staff)->post("/assignments/$id/deactivate")->assertForbidden();
         $this->actingAs(User::factory()->role('DIREKSI', null)->create())->post("/assignments/$id/deactivate")->assertForbidden();
-        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->post("/assignments/$id/deactivate")->assertForbidden();
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->post("/assignments/$id/deactivate")->assertNotFound(); // admin: di luar jangkauan
         $this->actingAs(User::factory()->role('MANAGER_GM', 'CP')->create())->post("/assignments/$id/deactivate")->assertNotFound();
         $this->actingAs($this->manager)->post('/assignments/999999/deactivate')->assertNotFound();
         $this->assertTrue((bool) $this->row($this->staff)->is_active);
@@ -205,6 +205,6 @@ class ProjectAssignmentTest extends TestCase
         $this->assertTrue($page->viewData('can')['manageTeam']);
 
         $this->actingAs($this->staff)->get("/projects/{$this->project->id}")->assertOk()->assertDontSee('Tugaskan')->assertDontSee('Nonaktifkan');
-        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->get("/projects/{$this->project->id}")->assertOk()->assertDontSee('Tugaskan');
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->get("/projects/{$this->project->id}")->assertNotFound();
     }
 }

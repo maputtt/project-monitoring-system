@@ -4,7 +4,7 @@
     $pct = fn (string $value) => Money::pct($value); // teks tampilan: koma desimal (Indonesia)
     $signed = fn (string $value) => (str_starts_with($value, '-') || $value === '0.00' ? '' : '+').Money::format($value);
     $role = auth()->user()->role;
-    $readOnly = in_array($role, [\App\Enums\Role::DIREKSI, \App\Enums\Role::SYSTEM_ADMIN], true);
+    $readOnly = $role === \App\Enums\Role::DIREKSI; // SYSTEM_ADMIN tidak pernah sampai ke halaman ini (project 404)
     $locked = $project->status->isBaselineLocked();
     $closed = $summary['actual_profit'] !== null;
     $exclusive = $project->contract_tax_mode === 'EXCLUSIVE_PPN';
@@ -48,9 +48,7 @@
     $todayWib = now(config('app.local_timezone'))->toDateString();
 @endphp
 <x-layouts.app :title="$project->project_name">
-    @if ($role !== \App\Enums\Role::SYSTEM_ADMIN)
-        <a href="{{ route('projects.index') }}" class="btn mb-4"><x-icon name="arrow" size="h-4 w-4" class="rotate-180" />PKS &amp; Projects</a>
-    @endif
+    <a href="{{ route('projects.index') }}" class="btn mb-4"><x-icon name="arrow" size="h-4 w-4" class="rotate-180" />PKS &amp; Projects</a>
 
     <div class="page-head items-end">
         <div class="min-w-0">
@@ -649,6 +647,12 @@
                                         <span class="whitespace-nowrap">· {{ \Illuminate\Support\Carbon::parse($latest->progress_date)->format('d/m/Y') }}</span></p>
                                     <button type="button" class="btn mt-2 ml-0 px-3 py-1.5 text-[13px]" aria-controls="riwayat-progres-{{ $invoice->id }}" :aria-expanded="hist === {{ $invoice->id }}" @click="hist = hist === {{ $invoice->id }} ? null : {{ $invoice->id }}">Riwayat progres ({{ $invoice->progress->count() }})</button>
                                 @endif
+                                <dl class="mt-2 grid max-w-md grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-slate-600 sm:grid-cols-2" aria-label="Tanggal tonggak penagihan termin {{ $invoice->sequence_number }}">
+                                    @foreach (\App\Http\Controllers\InvoiceController::BILLING_MILESTONES as $code)
+                                        @php $ms = $invoice->progress->where('stage', $code)->sortByDesc('id')->first(); @endphp
+                                        <div class="flex justify-between gap-2"><dt>{{ \App\Http\Controllers\InvoiceController::PROGRESS_STAGES[$code] }}</dt><dd class="whitespace-nowrap font-semibold text-slate-900">{{ $ms ? \Illuminate\Support\Carbon::parse($ms->progress_date)->format('d/m/Y') : '–' }}</dd></div>
+                                    @endforeach
+                                </dl>
                                 @if ($invoice->canRecordProgress)
                                     @include('projects._progress-form')
                                 @endif

@@ -50,7 +50,8 @@ class Project extends Model
     public function scopeVisibleTo(Builder $query, User $user): void
     {
         match ($user->role) {
-            Role::DIREKSI, Role::SYSTEM_ADMIN => null, // semua divisi, read-only
+            Role::DIREKSI => null, // semua divisi, read-only
+            Role::SYSTEM_ADMIN => $query->whereRaw('1 = 0'), // administrasi sistem saja, tanpa data project (keputusan PM 2026-11-16)
             Role::MANAGER_GM => $query->where('projects.department', $user->department),
             Role::STAFF_PIC => $query->where('projects.department', $user->department)
                 ->whereExists(fn ($assignment) => $assignment->from('project_user_assignments')
@@ -65,7 +66,7 @@ class Project extends Model
         return static::query()->visibleTo($user)->whereKey($this->getKey())->exists();
     }
 
-    /** Tabel projects tidak punya submitted_by; siapa pun yang pernah SUBMIT (baris audit mana pun) tidak boleh mengaktifkan. */
+    /** Tabel projects tidak punya submitted_by; siapa pun yang pernah SUBMIT (baris audit mana pun) tidak boleh mengaktifkan (keputusan user 2026-10-14). */
     public function hasBeenSubmittedBy(User $user): bool
     {
         return DB::table('audit_logs')->where('entity_type', 'PROJECT')->where('entity_id', $this->getKey())

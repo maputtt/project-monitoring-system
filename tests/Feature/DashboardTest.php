@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// DSH-01 (AC-23, UX layar 2): KPI per role dari Project::visibleTo, read-only, filter divisi hanya DIREKSI/SYSTEM_ADMIN.
+// DSH-01 (AC-23, UX layar 2): KPI per role dari Project::visibleTo, read-only, filter divisi hanya DIREKSI. SYSTEM_ADMIN: dashboard admin tanpa KPI (PM 2026-11-16).
 class DashboardTest extends TestCase
 {
     use RefreshDatabase;
@@ -35,7 +35,7 @@ class DashboardTest extends TestCase
         $this->b = $this->project(['project_code' => 'BM-B', 'status' => 'SUBMITTED', 'contract_value' => '2000.20', 'effective_rab' => '1400.10', 'target_margin_amount' => '300.30']);
         $this->c = $this->project(['project_code' => 'CP-C', 'department' => 'CP', 'status' => 'ACTIVE', 'contract_value' => '4000.40', 'effective_rab' => '2800.20', 'target_margin_amount' => '600.60']);
 
-        // A: outstanding 222.22 (INVOICE_SUBMITTED; PLANNED/CANCELLED/PAID tidak dihitung), nett 90.55.
+        // A: outstanding 222.22 (INVOICE_SUBMITTED; PLANNED/CANCELLED/PAID tidak dihitung).
         $this->invoice($this->a, 1, 'PAID', '111.00', '90.55');
         $this->invoice($this->a, 2, 'INVOICE_SUBMITTED', '222.22');
         $this->invoice($this->a, 3, 'PLANNED', null);
@@ -80,7 +80,7 @@ class DashboardTest extends TestCase
     /** Semua kunci KPI dalam urutan controller; tes hanya menyebut yang berbeda dari nol. */
     private function expected(array $override): array
     {
-        return array_replace(['activated' => 0, 'projects' => 0, 'completed' => 0, 'contract' => '0.00', 'rab' => '0.00', 'margin' => '0.00', 'margin_pct' => '0.00', 'outstanding' => '0.00', 'nett' => '0.00', 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 0, 'pending' => 0], $override);
+        return array_replace(['activated' => 0, 'projects' => 0, 'completed' => 0, 'open_count' => 0, 'contract' => '0.00', 'closed_contract' => '0.00', 'rab_changed' => 0, 'margin' => '0.00', 'margin_pct' => '0.00', 'outstanding_count' => 0, 'realized_count' => 0, 'realized' => '0.00', 'realized_pct' => '0.00', 'overbudget' => 0, 'pending' => 0], $override);
     }
 
     private function kpi(User $user, string $query = ''): array
@@ -90,20 +90,20 @@ class DashboardTest extends TestCase
 
     public function test_staff_sees_kpis_of_assigned_projects_only(): void
     {
-        $this->assertSame($this->expected(['activated' => 1, 'projects' => 1, 'contract' => '1000.10', 'rab' => '700.05', 'margin' => '150.15', 'outstanding' => '222.22', 'nett' => '90.55', 'overbudget' => 2, 'pending' => 4]), $this->kpi($this->staff));
+        $this->assertSame($this->expected(['activated' => 1, 'projects' => 1, 'open_count' => 1, 'contract' => '1000.10', 'rab_changed' => 1, 'margin' => '150.15', 'outstanding_count' => 1, 'overbudget' => 2, 'pending' => 4]), $this->kpi($this->staff));
     }
 
     public function test_manager_sees_the_whole_division(): void
     {
         // BM-B (SUBMITTED) tidak masuk angka uang (6A), tetapi tagihan PAYMENT_SUBMITTED-nya tetap dihitung di antrean persetujuan (pending 7).
-        $this->assertSame($this->expected(['activated' => 1, 'projects' => 1, 'contract' => '1000.10', 'rab' => '700.05', 'margin' => '150.15', 'outstanding' => '222.22', 'nett' => '90.55', 'overbudget' => 2, 'pending' => 7]), $this->kpi($this->manager));
+        $this->assertSame($this->expected(['activated' => 1, 'projects' => 1, 'open_count' => 1, 'contract' => '1000.10', 'rab_changed' => 1, 'margin' => '150.15', 'outstanding_count' => 1, 'overbudget' => 2, 'pending' => 7]), $this->kpi($this->manager));
     }
 
-    public function test_direksi_and_system_admin_see_all_divisions_and_can_filter(): void
+    public function test_direksi_sees_all_divisions_and_can_filter(): void
     {
-        $all = $this->expected(['activated' => 2, 'projects' => 2, 'contract' => '5000.50', 'rab' => '3500.25', 'margin' => '750.75', 'outstanding' => '1456.78', 'nett' => '7868.32', 'overbudget' => 3, 'pending' => 8]);
-        $cp = $this->expected(['activated' => 1, 'projects' => 1, 'contract' => '4000.40', 'rab' => '2800.20', 'margin' => '600.60', 'outstanding' => '1234.56', 'nett' => '7777.77', 'overbudget' => 1, 'pending' => 1]);
-        foreach ([User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        $all = $this->expected(['activated' => 2, 'projects' => 2, 'open_count' => 2, 'contract' => '5000.50', 'rab_changed' => 2, 'margin' => '750.75', 'outstanding_count' => 2, 'overbudget' => 3, 'pending' => 8]);
+        $cp = $this->expected(['activated' => 1, 'projects' => 1, 'open_count' => 1, 'contract' => '4000.40', 'rab_changed' => 1, 'margin' => '600.60', 'outstanding_count' => 1, 'overbudget' => 1, 'pending' => 1]);
+        foreach ([User::factory()->role('DIREKSI', null)->create()] as $user) {
             $this->assertSame($all, $this->kpi($user));
             $this->assertSame($cp, $this->kpi($user, '?department=CP'));
             $this->assertSame(1, $this->kpi($user, '?department=BM')['projects']);
@@ -127,14 +127,35 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_has_no_project_list_and_page_is_read_only(): void
     {
-        $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
-        $response = $this->actingAs($admin)->get('/dashboard')->assertOk();
+        $response = $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get('/dashboard')->assertOk();
         foreach ([$this->a, $this->b, $this->c] as $project) {
             $response->assertDontSee($project->project_code)->assertDontSee('href="'.route('projects.show', $project->id).'"', false);
         }
         $response->assertSee('Rp5.000,50')->assertSee('Rp1.456,78')
             ->assertDontSee('/edit')->assertDontSee('/approve')->assertDontSee('/submit')->assertDontSee('Project baru')->assertDontSee('name="_method"', false);
         $this->post('/dashboard')->assertStatus(405);
+    }
+
+    public function test_cards_sit_in_their_section_once_and_headings_match_aria_for_every_role(): void
+    {
+        $sections = [
+            'ringkasan' => ['Total Nilai Project', 'Project Perubahan RAB', 'Target Margin', 'Margin Realisasi', 'Total Nilai Project Tutup Buku', 'BQ Overbudget'],
+            'status-project' => ['Project Aktif/Berjalan', 'Project Selesai', 'Project Tutup Buku', 'Calon Kontrak'],
+            'perhatian' => ['Approval pending', 'Termin terlambat ditagih', 'Termin belum lunas', 'Kendala aktif'],
+        ];
+        foreach ([$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()] as $user) {
+            $html = $this->actingAs($user)->get('/dashboard')->assertOk()->getContent();
+            $this->assertStringNotContainsString('Uang Diterima', $html);
+            foreach ($sections as $id => $labels) {
+                $this->assertSame(1, preg_match_all('/<h2 id="'.$id.'"/', $html), "{$user->role->value} h2 $id");
+                $this->assertSame(1, preg_match_all('/aria-labelledby="'.$id.'"/', $html), "{$user->role->value} aria $id");
+                preg_match('/<section[^>]*aria-labelledby="'.$id.'".*?<\/section>/s', $html, $m);
+                foreach ($labels as $label) {
+                    $this->assertSame(1, substr_count($m[0], '>'.$label.'</p>'), "{$user->role->value} $label in $id");
+                    $this->assertSame(1, substr_count($html, '>'.$label.'</p>'), "{$user->role->value} $label once on page");
+                }
+            }
+        }
     }
 
     public function test_empty_state_and_guest(): void

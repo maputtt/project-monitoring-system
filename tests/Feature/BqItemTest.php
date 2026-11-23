@@ -157,7 +157,7 @@ class BqItemTest extends TestCase
             $this->edit($id, user: $user)->assertNotFound();
         }
 
-        foreach ([User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        foreach ([User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create()] as $user) {
             $this->add(user: $user)->assertForbidden();
             $this->edit($id, user: $user)->assertForbidden();
         }
@@ -231,7 +231,7 @@ class BqItemTest extends TestCase
         foreach (['SUBMITTED', 'REVISION_REQUIRED', 'APPROVED', 'CLOSED'] as $status) { // semua status item harus bisa dirender
             DB::table('bq_items')->insert(['project_id' => $this->project->id, 'item_name' => "st-$status", 'status' => $status, 'created_by' => $this->staff->id]);
         }
-        $viewers = [User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $viewers = [User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create()];
 
         foreach (['DRAFT', 'ACTIVE', 'SUBMITTED', 'COMPLETED', 'FINANCIALLY_CLOSED', 'ARCHIVED', 'CANCELLED'] as $status) {
             $this->setProjectStatus($status);

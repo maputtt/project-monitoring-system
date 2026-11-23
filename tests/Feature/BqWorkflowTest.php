@@ -227,7 +227,7 @@ class BqWorkflowTest extends TestCase
         $draft = $this->bq();
         $this->post("/bq-items/$submitted/approve")->assertRedirect('/login');
         $this->actingAs(User::factory()->role('STAFF_PIC', 'BM')->create())->post("/bq-items/$draft/submit")->assertNotFound(); // satu divisi, tidak ditugaskan
-        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->post("/bq-items/$submitted/approve")->assertForbidden();
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->post("/bq-items/$submitted/approve")->assertNotFound(); // admin: project di luar jangkauan
         $this->actingAs(User::factory()->role('DIREKSI', null)->create())->post("/bq-items/$draft/submit")->assertForbidden();
         // 404/403 mendahului validasi alasan.
         $this->actingAs(User::factory()->role('MANAGER_GM', 'CP')->create())->post("/bq-items/$submitted/request-revision")->assertNotFound();
@@ -273,9 +273,7 @@ class BqWorkflowTest extends TestCase
         foreach (["bq-items/$submitted/", "bq-items/$own/", "bq-items/$approved/submit", "bq-items/$operational/submit"] as $absent) {
             $this->assertStringNotContainsString($absent, $staff, $absent);
         }
-        foreach (['DIREKSI', 'SYSTEM_ADMIN'] as $role) {
-            $this->assertStringNotContainsString('/bq-items/', $this->actingAs(User::factory()->role($role, null)->create())->get("/projects/{$this->project->id}")->assertOk()->getContent(), $role);
-        }
+        $this->assertStringNotContainsString('/bq-items/', $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get("/projects/{$this->project->id}")->assertOk()->getContent());
     }
 
     public function test_oversized_route_ids_return_404_not_500(): void

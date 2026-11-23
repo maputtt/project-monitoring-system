@@ -85,8 +85,8 @@ class StatusTransitionTest extends TestCase
         $this->assertContains('Approvals', $labels(Role::MANAGER_GM));
         $this->assertNotContains('Approvals', $labels(Role::STAFF_PIC));
         $this->assertNotContains('Tarif Pajak', $labels(Role::DIREKSI));
-        $this->assertSame(['Dashboard', 'Pengguna', 'Audit Log'], $labels(Role::SYSTEM_ADMIN));
-        $this->assertSame(['/dashboard', '/master/users', '/audit-logs'], array_column(Role::SYSTEM_ADMIN->menu(), 'path'));
+        $this->assertSame(['Dashboard', 'Pengguna', 'Tiket'], $labels(Role::SYSTEM_ADMIN));
+        $this->assertSame(['/dashboard', '/master/users', '/support-tickets'], array_column(Role::SYSTEM_ADMIN->menu(), 'path'));
         $dataMaster = array_values(array_filter(Role::STAFF_PIC->menu(), fn (array $item) => $item['label'] === 'Data Master'));
         $this->assertSame([['label' => 'Data Master', 'path' => '/master/pks']], $dataMaster);
         $this->assertNotContains('Data Master', $labels(Role::MANAGER_GM));

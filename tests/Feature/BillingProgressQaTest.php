@@ -144,6 +144,7 @@ class BillingProgressQaTest extends TestCase
         };
         $first = $this->invoice($this->project, 1);
         $this->note($first, $this->project, '2026-10-27', true);
+        $queries(); // pemanasan: tulis last_seen_at (dibatasi 1x/menit) hanya terjadi pada request pertama
         $small = $queries();
         for ($i = 2; $i <= 6; $i++) {
             $id = $this->invoice($this->project, $i);

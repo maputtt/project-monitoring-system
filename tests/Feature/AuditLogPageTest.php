@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// AUD-01 (UX layar 14): audit log read-only. MANAGER_GM hanya project divisinya; DIREKSI dan SYSTEM_ADMIN semuanya.
+// AUD-01 (UX layar 14): audit log read-only. MANAGER_GM hanya project divisinya; DIREKSI semuanya; SYSTEM_ADMIN tidak punya akses (PM 2026-11-16).
 class AuditLogPageTest extends TestCase
 {
     use RefreshDatabase;
@@ -62,13 +62,12 @@ class AuditLogPageTest extends TestCase
         $this->log('USER', $this->bm->id, 'kelola-user-bentrok-id'); // entity_id sama dengan id project BM, tapi bukan project
     }
 
-    public function test_direksi_and_system_admin_see_everything(): void
+    public function test_direksi_sees_everything_and_system_admin_is_forbidden(): void
     {
         $this->seedLogs();
-        foreach (['DIREKSI' => null, 'SYSTEM_ADMIN' => 'ITBS'] as $role => $dept) {
-            $this->actingAs(User::factory()->role($role, $dept)->create())->get('/audit-logs')->assertOk()
-                ->assertSee(['proyek-bm', 'bq-bm', 'invoice-bm', 'tim-bm', 'proyek-cp', 'bq-cp', 'invoice-cp', 'kelola-user-bentrok-id'])->assertDontSee('login-sistem'); // baris LOGIN lama disembunyikan
-        }
+        $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get('/audit-logs')->assertOk()
+            ->assertSee(['proyek-bm', 'bq-bm', 'invoice-bm', 'tim-bm', 'proyek-cp', 'bq-cp', 'invoice-cp', 'kelola-user-bentrok-id'])->assertDontSee('login-sistem'); // baris LOGIN lama disembunyikan
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create())->get('/audit-logs')->assertForbidden();
     }
 
     public function test_manager_sees_only_project_logs_of_own_division(): void
@@ -105,13 +104,12 @@ class AuditLogPageTest extends TestCase
         $this->log('INVOICE', $this->invoice($this->bm), 'c-lain-submit', 'SUBMIT', $other, '2026-10-05 17:00:00'); // 00:00:00 WIB hari berikutnya
         $this->actingAs(User::factory()->role('DIREKSI', null)->create());
 
-        $this->get('/audit-logs?user_id='.$this->staff->id)->assertSee(['a-rina-update', 'b-rina-submit'])->assertDontSee('c-lain-submit');
         $this->get('/audit-logs?action=SUBMIT')->assertSee(['b-rina-submit', 'c-lain-submit'])->assertDontSee('a-rina-update');
         $this->get('/audit-logs?entity_type=INVOICE')->assertSee('c-lain-submit')->assertDontSee(['a-rina-update', 'b-rina-submit']);
         $this->get('/audit-logs?date_from=2026-10-05&date_to=2026-10-05')->assertSee('b-rina-submit')->assertDontSee(['a-rina-update', 'c-lain-submit']); // date_to inklusif
-        $this->get('/audit-logs?user_id='.$this->staff->id.'&action=SUBMIT&date_from=2026-10-02')->assertSee('b-rina-submit')->assertDontSee(['a-rina-update', 'c-lain-submit']);
+        $this->get('/audit-logs?action=SUBMIT&date_from=2026-10-02')->assertSee(['b-rina-submit', 'c-lain-submit'])->assertDontSee('a-rina-update');
 
-        $this->get('/audit-logs?user_id=999999')->assertSessionHasErrors('user_id');
+        $this->get('/audit-logs?department=BUKAN')->assertSessionHasErrors('department');
         $this->get('/audit-logs?entity_type=BUKAN')->assertSessionHasErrors('entity_type');
         $this->get('/audit-logs?action=BUKAN')->assertSessionHasErrors('action');
         $this->get('/audit-logs?date_from=2026-10-06&date_to=2026-10-05')->assertSessionHasErrors('date_to');
@@ -120,7 +118,7 @@ class AuditLogPageTest extends TestCase
 
     public function test_newest_first_pagination_keeps_filters_and_empty_state_and_escaping(): void
     {
-        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create())->get('/audit-logs')->assertSee('Belum ada catatan audit');
+        $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get('/audit-logs')->assertSee('Belum ada catatan audit');
         foreach (range(1, 31) as $i) {
             $this->log('PROJECT', $this->bm->id, sprintf('baris-%02d', $i), 'UPDATE', null, sprintf('2026-10-%02d 10:00:00', $i));
         }

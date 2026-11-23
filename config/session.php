@@ -32,7 +32,7 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 30), // PRD: timeout 30 menit
+    'lifetime' => (int) env('SESSION_LIFETIME', 60), // PM 2026-11-19: 60 menit (menggantikan baseline PRD 30)
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 

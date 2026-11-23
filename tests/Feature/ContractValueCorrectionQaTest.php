@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-// QA independen Paket 3 (koreksi nilai kontrak, 7B): celah yang tidak dicakup ContractValueCorrectionTest.
+// QA independen Paket 3 (koreksi nilai kontrak, keputusan GM 7B): celah yang tidak dicakup ContractValueCorrectionTest.
 // Fokus: hitung ulang independen (bcmath murni, tanpa Money) untuk banyak kombinasi, baseline dan snapshot invoice tidak berubah, interaksi dengan adjustment target margin,
 // usulan ganda, dan penyimpangan input.
 class ContractValueCorrectionQaTest extends TestCase
@@ -293,11 +293,11 @@ class ContractValueCorrectionQaTest extends TestCase
         DB::table('invoices')->where('project_id', $p->id)->where('sequence_number', 3)->update(['workflow_status' => 'CANCELLED']);
         $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
         $this->post('/projects/'.$p->id.'/adjustments', [])->assertRedirect('/login');
-        $this->submit($p, as: $admin)->assertForbidden();
+        $this->submit($p, as: $admin)->assertNotFound(); // admin: project di luar jangkauan
 
         $this->submit($p)->assertSessionHasNoErrors();
         $id = $this->last()->id;
-        $this->actingAs($admin)->post("/adjustments/$id/approve")->assertForbidden();
+        $this->actingAs($admin)->post("/adjustments/$id/approve")->assertNotFound(); // admin: di luar jangkauan
         $this->actingAs($this->manager)->post("/adjustments/$id/request-revision", ['reason' => 'koreksi'])->assertSessionHasNoErrors();
         $this->actingAs($this->manager)->put("/adjustments/$id", ['file' => UploadedFile::fake()->create('Nota.pdf', 100, 'application/pdf'), 'margin_mode' => 'PCT', 'margin_value' => '15', 'reason' => 'x'])->assertForbidden();
         $other = User::factory()->role('STAFF_PIC', 'BM')->create();
@@ -317,11 +317,13 @@ class ContractValueCorrectionQaTest extends TestCase
     {
         [$p] = $this->project('1110000000.00', ['30.0000', '30.0000', '40.0000']);
         DB::table('invoices')->where('project_id', $p->id)->where('sequence_number', 3)->update(['workflow_status' => 'CANCELLED']);
-        $this->actingAs($this->manager)->get('/dashboard')->assertOk()->assertViewHas('kpi', fn ($kpi) => $kpi['contract'] === '1110000000.00' && $kpi['rab'] === '943500000.00');
+        $this->actingAs($this->manager)->get('/dashboard')->assertOk()->assertViewHas('kpi', fn ($kpi) => $kpi['contract'] === '1110000000.00' && $kpi['rab_changed'] === 0);
+        $this->assertSame('943500000.00', $p->fresh()->effective_rab);
 
         $this->submit($p)->assertSessionHasNoErrors();
         $this->actingAs($this->manager)->post('/adjustments/'.$this->last()->id.'/approve')->assertSessionHasNoErrors();
 
-        $this->actingAs($this->manager)->get('/dashboard')->assertOk()->assertViewHas('kpi', fn ($kpi) => $kpi['contract'] === '1110000000.00' && $kpi['rab'] === '566100000.00' && $kpi['margin'] === '99900000.00');
+        $this->actingAs($this->manager)->get('/dashboard')->assertOk()->assertViewHas('kpi', fn ($kpi) => $kpi['contract'] === '1110000000.00' && $kpi['rab_changed'] === 1 && $kpi['margin'] === '99900000.00');
+        $this->assertSame('566100000.00', $p->fresh()->effective_rab);
     }
 }

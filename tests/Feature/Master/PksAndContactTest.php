@@ -11,7 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// PRD 16.2.2, 16.2.3, FD-17: PKS dan PIC Bouwheer adalah data master milik Staff/PIC dari divisi mana pun.
+// PRD 16.2.2, 16.2.3, FD-17: PKS dan PIC Bouwheer adalah data master milik Staff/PIC dari divisi mana pun (keputusan user 2026-10-13).
 class PksAndContactTest extends TestCase
 {
     use RefreshDatabase;

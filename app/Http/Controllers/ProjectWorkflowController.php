@@ -8,6 +8,7 @@ use App\Exceptions\InvalidTransition;
 use App\Models\Project;
 use App\Support\Audit;
 use App\Support\Money;
+use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -79,6 +80,13 @@ class ProjectWorkflowController extends Controller
 
             Audit::record($action, 'PROJECT', $locked->id, $before, Arr::only($locked->refresh()->attributesToArray(), self::AUDITED), $reason);
         });
+
+        match ($to) {
+            ProjectStatus::SUBMITTED => Notify::send('awaiting', $project, $user, $project->project_code.': project menunggu persetujuan aktivasi'),
+            ProjectStatus::ACTIVE => Notify::send('decided', $project, $user, $project->project_code.': project disetujui dan aktif'),
+            ProjectStatus::DRAFT => Notify::send('decided', $project, $user, $project->project_code.': project perlu revisi'),
+            default => null, // selesai: tidak diberitahukan
+        };
 
         return redirect()->route('projects.show', $project)->with('status', $message);
     }

@@ -202,7 +202,7 @@ class InvoicePaymentTest extends TestCase
     {
         $id = $this->submitted();
         $blocked = [
-            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('MANAGER_GM', 'CP')->create(), 404], [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
         ];
         foreach ($blocked as [$user, $code]) {
@@ -317,9 +317,7 @@ class InvoicePaymentTest extends TestCase
         foreach (["invoices/$own/", "invoices/$paid/approve-payment", "invoices/$paid/request-revision", '/submit-payment'] as $absent) {
             $this->assertStringNotContainsString($absent, $manager, $absent);
         }
-        foreach (['DIREKSI', 'SYSTEM_ADMIN'] as $role) {
-            $html = $this->actingAs(User::factory()->role($role, null)->create())->get($page)->assertOk()->getContent();
-            $this->assertStringNotContainsString('-payment', $html, $role);
-        }
+        $html = $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get($page)->assertOk()->getContent();
+        $this->assertStringNotContainsString('-payment', $html);
     }
 }

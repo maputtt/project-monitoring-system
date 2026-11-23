@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
-// QA independen arsip BQ dan pembatalan termin: celah yang tidak dicakup BqArchiveTest dan InvoiceCancelTest.
+// QA independen arsip BQ dan pembatalan termin (keputusan 2026-10-17): celah yang tidak dicakup BqArchiveTest dan InvoiceCancelTest.
 // Fokus: APPROVED tidak punya jalan ke ARCHIVED, efek uang lewat alur nyata (arsip dulu, lalu guard mutasi/adjustment/kartu RAB), item ARCHIVED/CANCELLED
 // tidak bisa dipakai lagi, dan layar untuk semua peran dan status.
 class ArchiveCancelQaTest extends TestCase

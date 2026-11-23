@@ -296,7 +296,7 @@ class FinancialClosingQaTest extends TestCase
         $page = $this->actingAs($this->manager)->get("/projects/{$this->project->id}")->assertOk();
         $page->assertDontSee('<script>alert(1)</script>', false)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt; NORMAL belum punya realisasi biaya', false);
 
-        $roles = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $roles = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()];
         foreach (['DRAFT', 'SUBMITTED', 'ACTIVE', 'COMPLETED', 'FINANCIALLY_CLOSED', 'ARCHIVED', 'CANCELLED'] as $status) {
             DB::table('projects')->where('id', $this->project->id)->update(['status' => $status, 'actual_profit_amount' => $status === 'FINANCIALLY_CLOSED' ? '-1.00' : null]);
             foreach ($roles as $user) {

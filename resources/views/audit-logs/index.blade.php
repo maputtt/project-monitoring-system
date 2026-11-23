@@ -9,15 +9,17 @@
     </div>
 
     <form method="GET" action="{{ route('audit-logs.index') }}" class="card mb-6 grid grid-cols-2 gap-3 p-4 sm:p-5 lg:grid-cols-5 lg:items-end">
-        <label class="lbl col-span-2 sm:col-span-1">User
-            <select name="user_id" class="inp">
-                <option value="">Semua user</option>
-                @foreach ($users as $u)
-                    <option value="{{ $u->id }}" @selected((string) ($filters['user_id'] ?? '') === (string) $u->id)>{{ $u->name }}</option>
-                @endforeach
-            </select>
-            @error('user_id')<span class="text-xs text-rose-700">{{ $message }}</span>@enderror
-        </label>
+        @if ($departments !== [])
+            <label class="lbl col-span-2 sm:col-span-1">Divisi
+                <select name="department" class="inp">
+                    <option value="">Semua divisi</option>
+                    @foreach ($departments as $d)
+                        <option value="{{ $d->value }}" @selected(($filters['department'] ?? null) === $d->value)>{{ $d->value }} - {{ $d->label() }}</option>
+                    @endforeach
+                </select>
+                @error('department')<span class="text-xs text-rose-700">{{ $message }}</span>@enderror
+            </label>
+        @endif
         <label class="lbl col-span-2 sm:col-span-1">Entitas
             <select name="entity_type" class="inp">
                 <option value="">Semua entitas</option>

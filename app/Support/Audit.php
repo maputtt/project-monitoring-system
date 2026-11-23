@@ -20,6 +20,7 @@ final class Audit
         ?array $after = null,
         ?string $reason = null,
         ?int $userId = null,
+        ?string $at = null, // hanya untuk seeder data demo (menjaga urutan waktu riwayat); aplikasi selalu memakai waktu sekarang
     ): void {
         $request = request();
 
@@ -34,7 +35,7 @@ final class Audit
             'request_id' => self::requestId(),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-        ]);
+        ] + ($at === null ? [] : ['created_at' => $at]));
     }
 
     /** Satu id per request, sehingga beberapa baris audit dari aksi yang sama bisa dikaitkan. */

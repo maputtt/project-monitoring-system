@@ -29,7 +29,7 @@ class AuthTest extends TestCase
         $this->user();
 
         $this->get('/')->assertRedirect('/login');
-        $this->get('/login')->assertOk()->assertSee('Sesi berakhir setelah 30 menit');
+        $this->get('/login')->assertOk()->assertSee('Sesi berakhir setelah 60 menit');
         $this->post('/login', ['email' => 'rina@example.com', 'password' => 'password'])->assertRedirect('/'); // tujuan awal tamu
         $this->get('/')->assertRedirect('/dashboard');
         $this->get('/dashboard')->assertOk()->assertSee('Dashboard');
@@ -130,9 +130,9 @@ class AuthTest extends TestCase
         $this->assertNotCacheable($this->get('/')->assertRedirect('/login'));
     }
 
-    public function test_signed_in_user_does_not_see_the_login_page_and_session_lasts_30_minutes(): void
+    public function test_signed_in_user_does_not_see_the_login_page_and_session_lasts_60_minutes(): void
     {
         $this->actingAs($this->user())->get('/login')->assertRedirect();
-        $this->assertSame(30, config('session.lifetime'));
+        $this->assertSame(60, config('session.lifetime'));
     }
 }

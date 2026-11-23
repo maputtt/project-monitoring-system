@@ -153,7 +153,7 @@ class InvoiceUnlockQaTest extends TestCase
         DB::table('invoices')->where('workflow_status', 'PAYMENT_REVISION_REQUIRED')->update(['unlocked_at' => now(), 'unlock_reason' => 'tanpa pengguna']); // unlocked_by null
         foreach (['ACTIVE', 'COMPLETED', 'FINANCIALLY_CLOSED', 'ARCHIVED'] as $projectStatus) {
             DB::table('projects')->where('id', $this->project->id)->update(['status' => $projectStatus]);
-            foreach ([$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+            foreach ([$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()] as $user) {
                 $html = $this->actingAs($user)->get("/projects/{$this->project->id}")->assertOk()->getContent();
                 $expected = $user->is($this->manager) && in_array($projectStatus, ['ACTIVE', 'COMPLETED'], true);
                 $this->assertSame($expected, str_contains($html, "invoices/{$this->paid}/unlock"), "$projectStatus {$user->role->value}");

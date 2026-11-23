@@ -22,7 +22,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE projects DROP CHECK chk_projects_initial_contract_value');
+        DB::statement('ALTER TABLE projects DROP CONSTRAINT chk_projects_initial_contract_value');
 
         Schema::table('projects', function (Blueprint $table) {
             $table->dropColumn('initial_contract_value');

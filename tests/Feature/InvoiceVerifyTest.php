@@ -135,7 +135,7 @@ class InvoiceVerifyTest extends TestCase
     public function test_roles_scope_unknown_ids_and_guest(): void
     {
         $blocked = [
-            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('MANAGER_GM', 'CP')->create(), 404], [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
         ];
         foreach ($blocked as [$user, $code]) {
@@ -213,9 +213,7 @@ class InvoiceVerifyTest extends TestCase
 
         $staff = $this->actingAs($this->staff)->get($page)->assertOk()->assertSee('Alasan revisi: Lampiran buram')->assertDontSee('Diajukan oleh Anda')->getContent();
         $this->assertStringNotContainsString('/verify', $staff);
-        foreach (['DIREKSI', 'SYSTEM_ADMIN'] as $role) {
-            $this->assertStringNotContainsString('/verify', $this->actingAs(User::factory()->role($role, null)->create())->get($page)->assertOk()->getContent(), $role);
-        }
+        $this->assertStringNotContainsString('/verify', $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get($page)->assertOk()->getContent());
 
         DB::table('projects')->where('id', $this->project->id)->update(['status' => 'DRAFT']);
         $this->assertStringNotContainsString("invoices/{$this->inv}/verify", $this->actingAs($this->manager)->get($page)->getContent());

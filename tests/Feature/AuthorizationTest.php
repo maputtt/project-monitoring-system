@@ -67,7 +67,7 @@ class AuthorizationTest extends TestCase
         $this->assertSame([$this->assigned->id, $this->unassigned->id], $this->visibleIds($this->managerBm));
         $this->assertSame([$this->cp->id], $this->visibleIds($this->managerCp));
         $this->assertSame([$this->assigned->id, $this->unassigned->id, $this->cp->id], $this->visibleIds($this->direksi));
-        $this->assertSame([$this->assigned->id, $this->unassigned->id, $this->cp->id], $this->visibleIds($this->admin)); // read-only, seperti Direksi
+        $this->assertSame([], $this->visibleIds($this->admin)); // administrasi sistem saja (PM 2026-11-16)
     }
 
     public function test_inactive_assignment_and_assignment_in_another_division_give_no_access(): void
@@ -87,7 +87,7 @@ class AuthorizationTest extends TestCase
         $this->actingAs($this->managerBm)->get("/_test/projects/{$this->cp->id}")->assertNotFound();
         $this->actingAs($this->managerCp)->get("/_test/projects/{$this->cp->id}")->assertOk();
         $this->actingAs($this->direksi)->get("/_test/projects/{$this->cp->id}")->assertOk();
-        $this->actingAs($this->admin)->get("/_test/projects/{$this->assigned->id}")->assertOk();
+        $this->actingAs($this->admin)->get("/_test/projects/{$this->assigned->id}")->assertNotFound();
         $this->actingAs($this->direksi)->get('/_test/projects/999999')->assertNotFound();
     }
 
@@ -132,9 +132,8 @@ class AuthorizationTest extends TestCase
             $this->assertFalse($this->direksi->can($ability, $this->cp), $ability);
         }
 
-        // System Admin hanya boleh membuka project (read-only), tidak mengubah apa pun.
-        $this->assertTrue($this->admin->can('view', $this->assigned));
-        foreach (['update', 'contribute', 'approve'] as $ability) {
+        // System Admin tidak boleh melihat maupun mengubah project apa pun.
+        foreach (['view', 'update', 'contribute', 'approve'] as $ability) {
             $this->assertFalse($this->admin->can($ability, $this->assigned), $ability);
         }
     }

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
-// Verifikasi independen Revisi B (dashboard drill-down): angka kartu = jumlah daftar (semua halaman), rata-rata tertimbang dengan bcmath tangan,
+// Verifikasi independen Revisi B (dashboard drill-down): angka kartu = jumlah daftar (semua halaman), rata-rata biasa % per project dengan bcmath tangan,
 // lingkup per peran, input liar, XSS, paginasi, keadaan kosong, dan Sisa/overbudget setelah realisasi diisi.
 class RevisiBQaTest extends TestCase
 {
@@ -82,6 +82,22 @@ class RevisiBQaTest extends TestCase
         return array_reduce($rows, fn ($carry, $row) => bcadd($carry, (string) $row->$field, 2), '0.00');
     }
 
+    /** Rata-rata biasa persen per project: tiap % dibulatkan 2 desimal (seperti kolom daftar), dasar nol/null dikeluarkan, lalu Σ / n half-up; hanya bcmath. */
+    private function avgPct(array $rows, string $field): string
+    {
+        $sum = '0';
+        $n = 0;
+        foreach ($rows as $row) {
+            if ($row->margin_base_amount === null || bccomp((string) $row->margin_base_amount, '0', 2) === 0) {
+                continue;
+            }
+            $sum = bcadd($sum, $this->pct((string) $row->$field, (string) $row->margin_base_amount), 2);
+            $n++;
+        }
+
+        return $n === 0 ? '0.00' : $this->pct($sum, bcmul((string) $n, '100', 2));
+    }
+
     /** part / whole x 100, half-up (menjauhi nol), dua desimal, hanya bcmath. */
     private function pct(string $part, string $whole): string
     {
@@ -130,7 +146,7 @@ class RevisiBQaTest extends TestCase
     /** @return array<string, array{0: string, 1: ?string}> */
     public static function viewers(): array
     {
-        return ['manager' => ['manager', null], 'staff' => ['staff', null], 'direksi all' => ['direksi', null], 'direksi BM' => ['direksi', 'BM'], 'direksi CP' => ['direksi', 'CP'], 'admin' => ['admin', null]];
+        return ['manager' => ['manager', null], 'staff' => ['staff', null], 'direksi all' => ['direksi', null], 'direksi BM' => ['direksi', 'BM'], 'direksi CP' => ['direksi', 'CP']];
     }
 
     #[DataProvider('viewers')]
@@ -144,8 +160,7 @@ class RevisiBQaTest extends TestCase
         $allocation = $this->actingAs($user)->get('/dashboard'.$q)->viewData('allocation');
 
         $activated = $this->walk($user, "/dashboard/projects/activated$q", 'projects');
-        $this->assertSame([count($activated), $this->sum($activated, 'initial_contract_value'), $this->sum($activated, 'effective_rab'), $this->sum($activated, 'target_margin_amount')],
-            [$kpi['activated'], $kpi['contract'], $kpi['rab'], $kpi['margin']], 'Nilai Project / RAB Perubahan / Target Margin vs daftar activated');
+        $this->assertSame(count($activated), $kpi['activated']);
 
         $this->assertSame($kpi['projects'], count($this->walk($user, "/dashboard/projects/active$q", 'projects')));
         $this->assertSame($kpi['completed'], count($this->walk($user, "/dashboard/projects/completed$q", 'projects')));
@@ -153,15 +168,21 @@ class RevisiBQaTest extends TestCase
         $this->assertSame([$view['count'], $view['total']], [count($prospects), $this->sum($prospects, 'initial_contract_value')]);
         $open = $this->walk($user, "/dashboard/projects/open$q", 'projects');
         $this->assertSame($allocation['rab'], $this->sum($open, 'effective_rab'), 'RAB grafik vs daftar open');
+        $this->assertSame($kpi['margin'], $this->sum($open, 'target_margin_amount'), 'Target Margin vs daftar open');
+        $this->assertSame($kpi['rab_changed'], count($this->walk($user, "/dashboard/projects/rab_changed$q", 'projects')), 'Project Perubahan RAB vs daftar rab_changed');
+        $this->assertSame([count($open), $this->sum($open, 'initial_contract_value')], [$kpi['open_count'], $kpi['contract']], 'Total Nilai Project vs daftar open');
 
-        // Margin Realisasi: kartu, total halaman, dan jumlah baris semua halaman; persen tertimbang dari bcmath tangan.
+        // Margin Realisasi: kartu, total halaman, dan jumlah baris semua halaman; persen rata-rata biasa dari bcmath tangan.
         $page = $this->actingAs($user)->get('/dashboard/margin'.$q)->assertOk();
         $rows = $this->walk($user, "/dashboard/margin$q", 'projects');
         $totals = $page->viewData('totals');
         $this->assertSame([$kpi['realized_count'], $kpi['realized']], [count($rows), $this->sum($rows, 'actual_profit_amount')]);
         $this->assertSame([(string) count($rows), $kpi['realized'], $this->sum($rows, 'target_margin_amount')], [(string) $totals->n, $totals->actual, $totals->target]);
-        $this->assertSame($this->pct($kpi['realized'], $this->sum($rows, 'margin_base_amount')), $kpi['realized_pct']);
-        $this->assertSame($this->pct($kpi['margin'], (string) DB::table('projects')->whereIn('id', array_map(fn ($row) => $row->id, $activated))->sum('margin_base_amount')), $kpi['margin_pct']);
+        $this->assertSame([$this->sum($rows, 'initial_contract_value'), $totals->contract], [$kpi['closed_contract'], $kpi['closed_contract']], 'Total Nilai Project Tutup Buku vs daftar margin');
+        $this->assertSame($this->avgPct($rows, 'actual_profit_amount'), $kpi['realized_pct']);
+        $this->assertSame($this->avgPct($rows, 'actual_profit_amount'), $this->actingAs($user)->get('/dashboard/margin'.$q)->viewData('actualPct'));
+        $this->assertSame($this->avgPct($rows, 'target_margin_amount'), $page->viewData('targetPct'));
+        $this->assertSame($this->avgPct(DB::table('projects')->whereIn('id', array_map(fn ($row) => $row->id, $open))->get()->all(), 'target_margin_amount'), $kpi['margin_pct']);
 
         // BQ overbudget: kartu = jumlah baris daftar semua halaman.
         $items = $this->walk($user, "/dashboard/overbudget$q", 'items');
@@ -209,18 +230,17 @@ class RevisiBQaTest extends TestCase
             $late = $kpi->viewData('late_to_bill');
             $kpi = $kpi->viewData('kpi');
             $out = $this->walk($user, '/invoices?outstanding=1'.$q, 'invoices');
-            $paid = $this->walk($user, '/invoices?status=PAID'.$q, 'invoices');
             $lateRows = $this->walk($user, '/invoices?late_to_bill=1'.$q, 'invoices');
-            $this->assertSame([$kpi['outstanding'], $kpi['nett'], $late], [$this->sum($out, 'subtotal_amount'), $this->sum($paid, 'net_received_amount'), count($lateRows)], "user {$user->role->value}$q");
+            $this->assertSame([$kpi['outstanding_count'], $late], [count($out), count($lateRows)], "user {$user->role->value}$q");
         }
-        $this->assertSame(['50.50', '136.45', 2], (function () {
+        $this->assertSame([2, 2], (function () {
             $r = $this->actingAs($this->manager)->get('/dashboard');
 
-            return [$r->viewData('kpi')['outstanding'], $r->viewData('kpi')['nett'], $r->viewData('late_to_bill')];
-        })()); // 20,20 + 30,30; 97,45 + 39,00; terlambat: a3 dan c2
+            return [$r->viewData('kpi')['outstanding_count'], $r->viewData('late_to_bill')];
+        })()); // 20,20 + 30,30; terlambat: a3 dan c2
     }
 
-    public function test_weighted_percentages_match_an_independent_bcmath_calculation(): void
+    public function test_simple_average_percentages_match_an_independent_bcmath_calculation(): void
     {
         $a = $this->make('RB-W1', 'ACTIVE');
         $b = $this->make('RB-W2', 'COMPLETED');
@@ -237,11 +257,10 @@ class RevisiBQaTest extends TestCase
             DB::table('projects')->whereIn('id', [$a->id, $b->id])->update(['target_margin_amount' => $target, 'margin_base_amount' => $base]);
             DB::table('projects')->whereIn('id', [$c->id, $d->id])->update(['target_margin_amount' => $target, 'margin_base_amount' => $half, 'actual_profit_amount' => bcsub($target, bcdiv($target, '3', 2), 2)]);
             $kpi = $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi');
-            $sumBase = bcadd(bcmul($base, '2', 2), bcmul($half, '2', 2), 2);
-            $sumTarget = bcmul($target, '4', 2);
-            $this->assertSame($this->pct($sumTarget, $sumBase), $kpi['margin_pct'], "target $target / base $base");
+            // Target Margin hanya berjalan+selesai (2 project berdasar $base, target sama): rata-rata biasa = % satu project; yang tutup buku/arsip tidak ikut.
+            $this->assertSame($this->pct($target, $base), $kpi['margin_pct'], "target $target / base $base");
             $profit = bcsub($target, bcdiv($target, '3', 2), 2);
-            $this->assertSame($this->pct(bcmul($profit, '2', 2), bcmul($half, '2', 2)), $kpi['realized_pct'], "actual $profit / base $half");
+            $this->assertSame($this->pct($profit, $half), $kpi['realized_pct'], "actual $profit / base $half");
         }
         // Laba negatif dibulatkan menjauhi nol: -1/800 = -0,125% menjadi -0,13%.
         DB::table('projects')->whereIn('id', [$c->id, $d->id])->update(['margin_base_amount' => '400.00', 'actual_profit_amount' => '-0.50']);
@@ -336,8 +355,9 @@ class RevisiBQaTest extends TestCase
     {
         foreach (['/dashboard/projects/activated' => 'Tidak ada project di daftar ini', '/dashboard/projects/prospects' => 'Tidak ada project di daftar ini', '/dashboard/margin' => 'Belum ada project tutup buku',
             '/dashboard/overbudget' => 'Tidak ada item BQ yang melewati budget'] as $url => $text) {
-            foreach ([$this->staff, $this->manager, $this->direksi, $this->admin] as $user) {
-                $this->actingAs($user)->get($url)->assertOk()->assertSee($text)->assertDontSee('page=');
+            foreach ([$this->staff, $this->manager, $this->direksi] as $user) {
+                $html = $this->actingAs($user)->get($url)->assertOk()->assertSee($text)->getContent();
+                $this->assertDoesNotMatchRegularExpression('/[?&;]page=\d+/', $html); // tautan paginasi saja; tautan "Laporkan Masalah" membawa ?page=URL
             }
         }
         $kpi = $this->actingAs($this->direksi)->get('/dashboard')->assertOk()->assertSee('Belum ada project di jangkauan Anda')->viewData('kpi');
@@ -381,7 +401,7 @@ class RevisiBQaTest extends TestCase
     {
         $this->mixedFixture();
         $html = $this->actingAs($this->manager)->get('/dashboard')->assertOk()->getContent();
-        foreach (['Total Nilai Project', 'RAB Perubahan', 'role="tooltip"', 'Penjelasan Kendala aktif', 'Target Margin', 'Margin Realisasi', 'Tagihan Belum Lunas', 'Uang Diterima (Nett)', 'Project Aktif/Berjalan', 'Project Selesai', 'Calon Kontrak'] as $label) {
+        foreach (['Total Nilai Project', 'RAB Perubahan', 'role="tooltip"', 'Penjelasan Kendala aktif', 'Target Margin', 'Margin Realisasi', 'Project Aktif/Berjalan', 'Project Selesai', 'Calon Kontrak'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
         $this->assertStringNotContainsString('RB-A02', $html); // daftar project di bawah dashboard sudah dihapus

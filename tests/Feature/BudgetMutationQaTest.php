@@ -308,9 +308,8 @@ class BudgetMutationQaTest extends TestCase
         $this->bq(status: 'DRAFT');
         $this->bq(status: 'SUBMITTED');
         $direksi = User::factory()->role('DIREKSI', null)->create();
-        $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
         $sections = ['id="ringkasan"', 'id="kontrak"', 'id="rincian-bq"', 'id="item-bq"', 'id="relokasi-budget"', 'id="jadwal"', 'id="dokumen"', 'id="tim"'];
-        foreach ([$this->staff, $this->manager, $direksi, $admin] as $u) {
+        foreach ([$this->staff, $this->manager, $direksi] as $u) {
             $html = $this->actingAs($u)->get("/projects/{$this->project->id}")->assertOk()->getContent();
             foreach ($sections as $s) {
                 $this->assertSame(1, substr_count($html, $s), "{$u->role->value} $s");
@@ -318,7 +317,7 @@ class BudgetMutationQaTest extends TestCase
             $this->assertStringContainsString('Perbaiki &lt;b&gt;ini&lt;/b&gt;', $html);
             $this->assertSame(1, substr_count($html, '<main'), 'one main');
         }
-        foreach ([$direksi, $admin] as $u) {
+        foreach ([$direksi] as $u) {
             $html = $this->actingAs($u)->get("/projects/{$this->project->id}")->getContent();
             foreach (['Setujui mutasi', '+ Ajukan mutasi', '+ Tambah item', '+ Unggah dokumen', 'Perbaiki mutasi'] as $s) {
                 $this->assertStringNotContainsString($s, $html, $u->role->value.' sees '.$s);

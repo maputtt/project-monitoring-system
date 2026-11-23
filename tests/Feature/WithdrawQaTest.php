@@ -79,7 +79,7 @@ class WithdrawQaTest extends TestCase
         $id = $this->make($path);
         $this->post("/$path/$id/withdraw", ['reason' => 'x'])->assertRedirect('/login');
         $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
-        $this->actingAs($admin)->post("/$path/$id/withdraw", ['reason' => 'x'])->assertStatus(403);
+        $this->actingAs($admin)->post("/$path/$id/withdraw", ['reason' => 'x'])->assertStatus(404);
         $this->actingAs($this->staff)->get("/$path/$id/withdraw")->assertStatus(405); // bukan GET
         $this->assertSame(['SUBMITTED', 0], [DB::table($table)->find($id)->status, $this->updates($entity, $id)->count()]);
     }

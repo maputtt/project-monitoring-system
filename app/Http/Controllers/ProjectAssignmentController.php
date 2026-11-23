@@ -34,7 +34,7 @@ class ProjectAssignmentController extends Controller
         DB::transaction(function () use ($project, $manager, $data) {
             $this->lockProject($project);
 
-            // Peran tim hanya PIC; input assignment_role dari klien diabaikan.
+            // Peran tim hanya PIC (keputusan user 2026-10-14); input assignment_role dari klien diabaikan.
             if (DB::table(self::TABLE)->where('project_id', $project->id)->where('user_id', $data['user_id'])->where('is_active', true)->exists()) {
                 throw ValidationException::withMessages(['user_id' => 'Staff/PIC ini sudah ditugaskan aktif pada project ini.']);
             }

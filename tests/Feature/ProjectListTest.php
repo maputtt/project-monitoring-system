@@ -57,6 +57,43 @@ class ProjectListTest extends TestCase
         $this->get('/projects?status=BUKAN')->assertSessionHasErrors('status');
     }
 
+    public function test_division_filter_is_for_direksi_only_and_ignored_for_division_roles(): void
+    {
+        Project::factory()->create(['project_code' => 'BM-ONLY']);
+        Project::factory()->create(['project_code' => 'CP-ONLY', 'department' => 'CP']);
+        $direksi = User::factory()->role('DIREKSI', null)->create();
+
+        $this->actingAs($direksi)->get('/projects')->assertSee('name="department"', false)->assertSee('Semua divisi')->assertSee('BM-ONLY')->assertSee('CP-ONLY');
+        $cp = $this->get('/projects?department=CP')->assertSee('CP-ONLY')->assertDontSee('BM-ONLY')->assertSee('1 project');
+        $this->assertSame(1, substr_count($cp->getContent(), '<details'), 'PKS tanpa project CP hilang');
+        $this->get('/projects?department=XX')->assertSessionHasErrors('department');
+
+        foreach ([$this->staff, $this->manager] as $user) {
+            $this->actingAs($user)->get('/projects?department=CP')->assertOk()->assertDontSee('name="department"', false)->assertDontSee('CP-ONLY');
+            $this->get('/projects?department=XX')->assertOk()->assertSessionHasNoErrors();
+        }
+    }
+
+    public function test_division_filter_combines_with_search_status_and_pks_counts_and_pagination(): void
+    {
+        $shared = Project::factory()->active()->create(['project_code' => 'BM-ACT']);
+        Project::factory()->active()->create(['project_code' => 'CP-ACT', 'department' => 'CP', 'pks_id' => $shared->pks_id]);
+        Project::factory()->create(['project_code' => 'CP-DRAFT', 'department' => 'CP', 'pks_id' => $shared->pks_id]);
+        $pksNumber = DB::table('pks')->where('id', $shared->pks_id)->value('pks_number');
+        $this->actingAs(User::factory()->role('DIREKSI', null)->create());
+
+        // Pencarian nomor PKS membawa semua project PKS itu; divisi dan status tetap menyaringnya (AND), hitungan = baris yang terlihat.
+        $res = $this->get('/projects?department=CP&status=ACTIVE&q='.urlencode($pksNumber))->assertSee('CP-ACT')->assertDontSee(['BM-ACT', 'CP-DRAFT'])->assertSee('1 project');
+        $this->assertSame(1, substr_count($res->getContent(), '<details'));
+        $this->get('/projects?department=CP&q='.urlencode($pksNumber))->assertSee('2 project')->assertSee(['CP-ACT', 'CP-DRAFT'])->assertDontSee('BM-ACT');
+        $this->get('/projects?department=ITBS')->assertOk()->assertSee('Tidak ada project yang cocok');
+
+        foreach (range(1, 11) as $i) {
+            Project::factory()->create(['project_code' => sprintf('CPX-%02d', $i), 'department' => 'CP']);
+        }
+        $this->get('/projects?department=CP')->assertSee('department=CP&amp;page=2', false);
+    }
+
     public function test_pks_groups_are_paginated(): void
     {
         foreach (range(1, 12) as $i) {
@@ -69,7 +106,7 @@ class ProjectListTest extends TestCase
         $this->get('/projects?page=2')->assertSee('P-11')->assertSee('P-12')->assertDontSee('P-10');
     }
 
-    public function test_detail_shows_the_financial_summary_and_is_read_only_for_system_admin(): void
+    public function test_detail_shows_the_financial_summary_and_is_closed_to_system_admin(): void
     {
         $project = Project::factory()->assignedTo($this->staff)->create(['status' => 'SUBMITTED', 'contract_tax_mode' => 'EXCLUSIVE_PPN', 'margin_base_ppn_rate_snapshot' => '11.0000']);
         $contact = DB::table('bouwheer_contacts')->where('id', $project->bouwheer_contact_id)->value('name');
@@ -87,8 +124,7 @@ class ProjectListTest extends TestCase
             ->assertDontSee('Aktivasi')->assertDontSee('Minta revisi');
 
         $this->actingAs($this->manager)->get("/projects/{$project->id}")->assertSee('Aktivasi')->assertSee('Minta revisi');
-        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create())->get("/projects/{$project->id}")->assertOk()
-            ->assertSee('Rp570.372.865,95')->assertDontSee('Aktivasi')->assertDontSee('Minta revisi')->assertDontSee('Ubah draft');
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create())->get("/projects/{$project->id}")->assertNotFound(); // admin: tanpa data project (PM 2026-11-16)
         $this->actingAs(User::factory()->role('DIREKSI', null)->create())->get("/projects/{$project->id}")->assertOk();
         $this->actingAs(User::factory()->role('MANAGER_GM', 'CP')->create())->get("/projects/{$project->id}")->assertNotFound();
     }

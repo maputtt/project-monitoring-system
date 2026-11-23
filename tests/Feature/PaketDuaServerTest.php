@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-// Paket 2, sisi server: tanggal rencana penagihan, terlambat ditagih, calon kontrak (dashboard), guard satu RAB.
+// Paket 2 (keputusan GM 2026-10-20), sisi server: tanggal rencana penagihan, terlambat ditagih, calon kontrak (dashboard), guard satu RAB.
 class PaketDuaServerTest extends TestCase
 {
     use RefreshDatabase;

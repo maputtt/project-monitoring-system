@@ -8,7 +8,7 @@
         <div class="min-w-0">
             <a href="{{ route('dashboard', $department ? ['department' => $department] : []) }}" class="btn mb-3"><x-icon name="arrow" size="h-4 w-4" class="rotate-180" />Dashboard</a>
             <h1 class="mt-1">Margin Realisasi</h1>
-            <p class="text-sm text-slate-600">Project tutup buku dengan laba aktual{{ $department ? ' · Divisi '.$department : '' }}. Persen = rupiah dibagi dasar margin; total memakai rata-rata tertimbang.</p>
+            <p class="text-sm text-slate-600">Project tutup buku dengan laba aktual{{ $department ? ' · Divisi '.$department : '' }}. Persen = rupiah dibagi dasar margin; persen total = rata-rata % per project.</p>
         </div>
         <p class="ml-auto self-end text-sm text-slate-600">{{ number_format($totals->n, 0, ',', '.') }} project</p>
     </div>
@@ -20,8 +20,8 @@
             <h2 id="total-margin">Total</h2>
             <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-3">
                 <div><dt class="text-xs text-slate-600">Nilai Project</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($totals->contract) }}</dd></div>
-                <div><dt class="text-xs text-slate-600">Target Margin</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($totals->target) }} · {{ $ratio($totals->target, $totals->base) }}</dd></div>
-                <div><dt class="text-xs text-slate-600">Margin Realisasi</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($totals->actual) }} · {{ $ratio($totals->actual, $totals->base) }}</dd></div>
+                <div><dt class="text-xs text-slate-600">Target Margin</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($totals->target) }} · {{ Money::pct($targetPct) }}%</dd></div>
+                <div><dt class="text-xs text-slate-600">Margin Realisasi</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($totals->actual) }} · {{ Money::pct($actualPct) }}%</dd></div>
             </dl>
         </section>
         <ul class="grid gap-3">

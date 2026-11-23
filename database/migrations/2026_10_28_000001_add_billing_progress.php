@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('stage', 30)->nullable()->after('entry_type');
             $table->boolean('is_issue')->default(false)->after('stage');
         });
-        DB::statement('ALTER TABLE project_progress DROP CHECK chk_progress_entry_type');
+        DB::statement('ALTER TABLE project_progress DROP CONSTRAINT chk_progress_entry_type');
         DB::statement("ALTER TABLE project_progress ADD CONSTRAINT chk_progress_entry_type CHECK (entry_type IN ('WEEKLY_UPDATE','MILESTONE','BILLING'))");
         DB::statement("ALTER TABLE project_progress ADD CONSTRAINT chk_progress_billing CHECK (entry_type <> 'BILLING' OR (invoice_id IS NOT NULL AND stage IS NOT NULL AND stage IN ('LAMPIRAN','BAPP','BAST','MEMO','INVOICE','MENUNGGU_BAYAR','LAINNYA')))");
     }
@@ -26,8 +26,8 @@ return new class extends Migration
             throw new RuntimeException('Rollback ditolak: masih ada progres penagihan (riwayat, tidak boleh dihapus).');
         }
 
-        DB::statement('ALTER TABLE project_progress DROP CHECK chk_progress_billing');
-        DB::statement('ALTER TABLE project_progress DROP CHECK chk_progress_entry_type');
+        DB::statement('ALTER TABLE project_progress DROP CONSTRAINT chk_progress_billing');
+        DB::statement('ALTER TABLE project_progress DROP CONSTRAINT chk_progress_entry_type');
         DB::statement("ALTER TABLE project_progress ADD CONSTRAINT chk_progress_entry_type CHECK (entry_type IN ('WEEKLY_UPDATE','MILESTONE'))");
         Schema::table('project_progress', function (Blueprint $table) {
             $table->dropConstrainedForeignId('invoice_id');

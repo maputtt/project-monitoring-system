@@ -15,7 +15,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ? $title.' — ' : '' }}{{ config('app.name') }}</title>
     <link rel="icon" href="/favicon.ico" sizes="any">
-    <link rel="icon" href="/images/logo-mark.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo-mark.svg') }}">
+    <meta name="theme-color" content="#0f1a45">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PMS">
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -34,7 +39,7 @@
             </aside>
         @elseif ($menu)
             <aside class="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden bg-linear-to-b from-brand-navy to-brand-blue-dark p-4 md:flex">
-                <a href="/" class="relative block rounded-2xl bg-white px-3 py-2 shadow-lg"><img src="{{ asset('images/logo.svg') }}" alt="Project Monitoring System" width="270" height="120" class="mx-auto h-20 w-auto"></a>
+                <a href="/" class="relative block rounded-2xl bg-white px-3 py-2 shadow-lg"><img src="{{ asset('images/logo.svg') }}" alt="Project Monitoring System" width="786" height="360" class="mx-auto h-20 w-auto"></a>
                 <p class="relative mt-7 mb-2 px-3 text-[11px] font-semibold tracking-wider text-slate-300 uppercase">Menu</p>
                 <nav class="relative space-y-1" aria-label="Menu utama">
                     @foreach ($menu as $item)
@@ -53,7 +58,58 @@
                         <span class="font-semibold text-slate-900">{{ $title }}</span>
                     </p>
                     @if ($user)
-                        <div class="relative ml-auto shrink-0" x-data="{ open: false }" @keydown.escape.window="if (open) { open = false; $refs.menubtn.focus() }" @click.outside="open = false">
+                        @php
+                            $unread = $user->unreadNotifications()->count();
+                            $notifications = $user->notifications()->latest()->limit(10)->get();
+                        @endphp
+                        <div class="ml-auto flex shrink-0 items-center gap-1">
+                        {{-- Lonceng notifikasi: di ponsel panel melebar penuh di bawah header (absolute terhadap header sticky), di sm+ menempel ke tombol. --}}
+                        <div class="sm:relative" x-data="{ open: false }" @keydown.escape.window="if (open) { open = false; $refs.bellbtn.focus() }" @click.outside="open = false">
+                            <button type="button" x-ref="bellbtn" @click="open = ! open" :aria-expanded="open" aria-controls="notif-menu" aria-label="Notifikasi{{ $unread ? ', '.$unread.' belum dibaca' : '' }}"
+                                    class="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:outline-none">
+                                <x-icon name="bell" size="h-5 w-5" />
+                                @if ($unread)
+                                    <span class="absolute top-0.5 right-0 min-w-5 rounded-full bg-rose-600 px-1 text-center text-[11px] leading-5 font-semibold text-white" aria-hidden="true">{{ $unread > 9 ? '9+' : $unread }}</span>
+                                @endif
+                            </button>
+                            <div id="notif-menu" x-show="open" x-cloak x-transition.origin.top.right.duration.150ms
+                                 class="absolute inset-x-2 top-full mt-2 rounded-2xl border border-slate-200/70 bg-white shadow-pop sm:inset-x-auto sm:right-0 sm:w-96">
+                                <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                                    <p class="font-semibold">Notifikasi</p>
+                                    @if ($unread)
+                                        <form method="POST" action="{{ route('notifications.read-all') }}">
+                                            @csrf
+                                            <button type="submit" class="text-sm font-medium text-brand-blue hover:underline focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:outline-none">Tandai semua dibaca</button>
+                                        </form>
+                                    @endif
+                                </div>
+                                @forelse ($notifications as $n)
+                                    <a href="{{ route('notifications.open', $n->id) }}" class="flex items-start gap-3 border-b border-slate-100 px-4 py-3 last:rounded-b-2xl last:border-b-0 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none">
+                                        <span @class(['mt-1.5 h-2 w-2 shrink-0 rounded-full', 'bg-brand-blue' => ! $n->read_at, 'bg-transparent' => $n->read_at]) aria-hidden="true"></span>
+                                        <span class="min-w-0">
+                                            <span @class(['block text-sm break-words', 'font-semibold text-slate-900' => ! $n->read_at, 'text-slate-600' => $n->read_at])>{{ $n->data['title'] ?? '' }}@unless ($n->read_at)<span class="sr-only"> (belum dibaca)</span>@endunless</span>
+                                            <span class="block text-xs text-slate-500">{{ $n->created_at->diffForHumans() }}</span>
+                                        </span>
+                                    </a>
+                                @empty
+                                    <p class="px-4 py-6 text-center text-sm text-slate-500">Belum ada notifikasi</p>
+                                @endforelse
+                                @if ($vapid = config('services.webpush.public_key'))
+                                    {{-- Push perangkat: kunci publik VAPID saja; tampil sesuai kemampuan dan izin browser. --}}
+                                    <div x-data="pushToggle" data-vapid-key="{{ $vapid }}" x-show="state !== 'hidden'" x-cloak class="rounded-b-2xl border-t border-slate-100 px-4 py-3 text-sm" aria-live="polite">
+                                        <button type="button" x-show="state === 'idle' || state === 'busy'" :disabled="state === 'busy'" @click="enable()" class="btn w-full">Aktifkan notifikasi di perangkat ini</button>
+                                        <p x-show="state === 'active'" class="font-medium text-emerald-700">Notifikasi aktif di perangkat ini</p>
+                                        <p x-show="state === 'denied'" class="text-slate-600">Notifikasi diblokir di pengaturan browser</p>
+                                        <p x-show="state === 'ios'" class="text-slate-600">Di iPhone: Bagikan → Tambahkan ke Layar Utama, lalu buka dari ikon PMS</p>
+                                        <div x-show="state === 'error'" class="space-y-2">
+                                            <p class="text-rose-700">Perangkat belum terdaftar untuk notifikasi. Coba lagi.</p>
+                                            <button type="button" @click="enable()" class="btn w-full">Coba lagi</button>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="relative shrink-0" x-data="{ open: false }" @keydown.escape.window="if (open) { open = false; $refs.menubtn.focus() }" @click.outside="open = false">
                             <button type="button" x-ref="menubtn" @click="open = ! open" :aria-expanded="open" aria-controls="user-menu" aria-label="Menu akun {{ $user->name }}"
                                     class="flex items-center gap-2.5 rounded-full py-1 pr-2 pl-1 transition hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:outline-none sm:pr-3">
                                 <x-avatar :name="$user->name" size="h-9 w-9 text-xs" />
@@ -73,11 +129,18 @@
                                     </div>
                                 </div>
                                 <p class="mt-3 text-sm text-slate-600">{{ $user->role->label() }}@if ($user->department)<span> · Divisi {{ $user->department->value }}</span>@endif</p>
-                                <form method="POST" action="{{ route('logout') }}" class="mt-4 border-t border-slate-100 pt-4">
+                                <div class="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+                                    <a href="{{ request()->routeIs('support-tickets.create') ? route('support-tickets.create', request()->only('page')) : route('support-tickets.create', ['page' => request()->fullUrl()]) }}" class="btn w-full">Laporkan Masalah</a>
+                                    <a href="{{ route('support-tickets.index') }}" class="btn w-full">{{ $user->role === \App\Enums\Role::SYSTEM_ADMIN ? 'Semua tiket' : 'Tiket saya' }}</a>
+                                    {{-- Face ID hanya untuk ponsel (window.pmsPhone dari passkey.js). --}}
+                                    <a href="{{ url('/passkeys') }}" x-show="window.pmsPhone" x-cloak class="btn w-full">Perangkat Face ID</a>
+                                </div>
+                                <form method="POST" action="{{ route('logout') }}" class="mt-2">
                                     @csrf
                                     <button type="submit" class="btn w-full"><x-icon name="logout" size="h-4 w-4" />Keluar</button>
                                 </form>
                             </div>
+                        </div>
                         </div>
                     @endif
                 </header>
@@ -109,6 +172,44 @@
             </main>
         </div>
     </div>
+
+    @if ($user)
+        {{-- Push masuk saat tab terbuka (pesan dari sw.js): hanya memberi tahu; tidak memuat ulang otomatis agar isian formulir aman. --}}
+        <div x-data="{ show: false }" x-init="navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'pms-notification') show = true })"
+             x-show="show" x-cloak role="status" aria-live="polite"
+             class="fixed inset-x-2 top-2 z-50 mx-auto flex max-w-xl items-center gap-2 rounded-2xl bg-brand-navy px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-sm text-white shadow-pop ring-1 ring-white/10">
+            <p class="min-w-0 flex-1"><span aria-hidden="true">🔔</span> Ada notifikasi baru.</p>
+            <button type="button" @click="location.reload()" class="shrink-0 rounded-full bg-brand-orange px-3 py-1.5 font-semibold text-brand-navy focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none">Muat ulang</button>
+            <button type="button" @click="show = false" aria-label="Tutup" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"><span aria-hidden="true">&times;</span></button>
+        </div>
+
+        {{-- Tawaran Face ID satu kali setelah login password di ponsel; keberhasilan baru ditampilkan setelah server menjawab OK. --}}
+        @if (! request()->is('passkeys*') && \App\Support\WebAuthn::canRegister(request()))
+            <section x-data="passkeyOffer" data-user-id="{{ $user->id }}" x-show="state !== 'hidden'" x-cloak aria-label="Aktifkan Face ID" aria-live="polite"
+                     class="fixed inset-x-3 bottom-24 z-30 mx-auto max-w-md rounded-2xl border border-slate-200/70 bg-white p-4 text-sm shadow-pop">
+                <div x-show="state !== 'done'">
+                    <p class="font-semibold text-slate-900">Buka PMS dengan Face ID atau sidik jari?</p>
+                    <p class="mt-1 text-slate-600">Di ponsel ini Anda tidak perlu mengetik password lagi selama 30 hari. Setelah 60 menit tidak aktif, aplikasi terkunci dan dibuka dengan Face ID.</p>
+                    <p x-show="msg" x-text="msg" class="mt-2 font-medium text-rose-700" role="alert"></p>
+                    <div class="mt-3 flex gap-2">
+                        <button type="button" @click="register()" :disabled="state === 'busy'" class="btn btn-primary flex-1"><span x-text="state === 'busy' ? 'Menunggu verifikasi…' : (msg ? 'Coba lagi' : 'Aktifkan')"></span></button>
+                        <button type="button" @click="skip()" :disabled="state === 'busy'" class="btn">Nanti saja</button>
+                    </div>
+                </div>
+                <div x-show="state === 'done'" class="flex items-start gap-3" role="status">
+                    <x-icon name="check" size="mt-0.5 h-5 w-5" class="text-emerald-600" />
+                    <p class="flex-1 font-medium text-emerald-800">Face ID aktif di perangkat ini.</p>
+                    <button type="button" @click="state = 'hidden'" class="btn">Tutup</button>
+                </div>
+            </section>
+        @endif
+
+        {{-- Kunci aplikasi di ponsel: muncul saat aplikasi dibuka kembali setelah sesi habis; server menolak apa pun tanpa sesi sah. --}}
+        <div x-data="passkeyLock" x-show="open" x-cloak role="dialog" aria-modal="true" aria-labelledby="lock-title"
+             class="fixed inset-0 z-[70] flex items-center justify-center bg-linear-to-br from-brand-navy via-brand-blue-dark to-brand-blue p-6 text-white">
+            <x-passkey-unlock dark />
+        </div>
+    @endif
 
     @if ($menu)
         <nav class="fixed inset-x-3 bottom-3 z-20 flex gap-1 rounded-2xl bg-brand-navy/95 p-1.5 shadow-pop ring-1 ring-white/10 backdrop-blur md:hidden" aria-label="Menu utama">

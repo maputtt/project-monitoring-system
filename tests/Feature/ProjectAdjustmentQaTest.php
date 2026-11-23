@@ -289,7 +289,7 @@ class ProjectAdjustmentQaTest extends TestCase
                 'old_data' => json_encode(['target_margin_pct' => '12.0000', 'target_margin_amount' => '23976000.00', 'effective_rab' => '175824000.00']),
                 'new_data' => json_encode(['target_margin_pct' => '10.0000', 'target_margin_amount' => '19980000.00', 'effective_rab' => '179820000.00', 'margin_mode' => 'PCT', 'margin_value' => '10.0000']), 'difference_amount' => '3996000.00']);
         }
-        $users = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $users = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()];
 
         foreach (['ACTIVE', 'COMPLETED', 'FINANCIALLY_CLOSED', 'ARCHIVED', 'CANCELLED'] as $status) {
             DB::table('projects')->where('id', $this->project->id)->update(['status' => $status]);

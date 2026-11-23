@@ -136,7 +136,8 @@ class ProjectDraftTest extends TestCase
         $this->put("/projects/{$project->id}", $this->updateForm($project))->assertNotFound();
 
         // Terlihat tetapi tidak berhak: 403.
-        foreach ([['MANAGER_GM', 'BM'], ['DIREKSI', null], ['SYSTEM_ADMIN', 'ITBS']] as [$role, $department]) {
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', 'ITBS')->create())->get("/projects/{$project->id}/edit")->assertNotFound(); // admin: di luar jangkauan
+        foreach ([['MANAGER_GM', 'BM'], ['DIREKSI', null]] as [$role, $department]) {
             $this->actingAs(User::factory()->role($role, $department)->create());
             $this->get("/projects/{$project->id}/edit")->assertForbidden();
             $this->put("/projects/{$project->id}", $this->updateForm($project))->assertForbidden();

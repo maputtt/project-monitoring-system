@@ -15,6 +15,8 @@ use App\Http\Controllers\InvoiceWorkflowController;
 use App\Http\Controllers\Master\BouwheerContactController;
 use App\Http\Controllers\Master\PksController;
 use App\Http\Controllers\Master\UserController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PasskeyController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProjectAdjustmentController;
 use App\Http\Controllers\ProjectAssignmentController;
@@ -22,6 +24,8 @@ use App\Http\Controllers\ProjectClosingController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectViewController;
 use App\Http\Controllers\ProjectWorkflowController;
+use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\TaxRateController;
 use App\Models\Project;
 use Illuminate\Http\Request;
@@ -37,27 +41,40 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1')->name('password.update');
 });
 
+// Buka kunci HP dengan Face ID/sidik jari (belum punya session; cookie pms_device + assertion). Pengecekan "sudah login" ada di controller.
+Route::get('/passkey/unlock-options', [PasskeyController::class, 'unlockOptions'])->middleware('throttle:passkey-options')->name('passkey.unlock-options');
+Route::post('/passkey/unlock', [PasskeyController::class, 'unlock'])->middleware('throttle:passkey-unlock')->name('passkey.unlock');
+
 // Semua halaman aplikasi butuh login dan akun aktif.
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    // Passkey perangkat sendiri (semua peran); milik orang lain 404.
+    Route::get('/passkeys', [PasskeyController::class, 'index'])->name('passkeys.index');
+    Route::post('/passkeys/options', [PasskeyController::class, 'options'])->name('passkeys.options');
+    Route::post('/passkeys', [PasskeyController::class, 'store'])->name('passkeys.store');
+    Route::delete('/passkeys/{id}', [PasskeyController::class, 'destroy'])->where('id', '[0-9]{1,18}')->name('passkeys.destroy');
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->middleware('throttle:10,1')->name('push-subscriptions.store'); // semua peran; hanya perangkat sendiri (Story D)
 
-    // Dashboard (DSH-01): semua role, read-only. '/' hanya mengarahkan ke sana.
+    // Dashboard (DSH-01): semua role, read-only; SYSTEM_ADMIN hanya mendapat dashboard admin tanpa angka finansial. '/' hanya mengarahkan ke sana.
     Route::redirect('/', '/dashboard')->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    // Drill-down kartu dashboard (read-only, semua role; lingkup tetap Project::visibleTo). Invoice dan antrean persetujuan memakai /invoices dan /approvals.
-    Route::get('/dashboard/projects/{group}', [DashboardListController::class, 'projects'])->where('group', 'activated|active|completed|prospects|open')->name('dashboard.projects');
-    Route::get('/dashboard/overbudget', [DashboardListController::class, 'overbudget'])->name('dashboard.overbudget');
-    Route::get('/dashboard/kendala', [DashboardListController::class, 'kendala'])->name('dashboard.kendala');
-    Route::get('/dashboard/margin', [DashboardListController::class, 'margin'])->name('dashboard.margin');
+    // Drill-down kartu dashboard (read-only; tertutup bagi SYSTEM_ADMIN, lingkup tetap Project::visibleTo). Invoice dan antrean persetujuan memakai /invoices dan /approvals.
+    Route::middleware('role:STAFF_PIC,MANAGER_GM,DIREKSI')->group(function () {
+        Route::get('/dashboard/projects/{group}', [DashboardListController::class, 'projects'])->where('group', 'activated|active|completed|prospects|open|rab_changed')->name('dashboard.projects');
+        Route::get('/dashboard/overbudget', [DashboardListController::class, 'overbudget'])->name('dashboard.overbudget');
+        Route::get('/dashboard/kendala', [DashboardListController::class, 'kendala'])->name('dashboard.kendala');
+        Route::get('/dashboard/margin', [DashboardListController::class, 'margin'])->name('dashboard.margin');
+    });
 
     // Pengguna: hanya SYSTEM_ADMIN. Tidak ada route hapus.
     Route::middleware('role:SYSTEM_ADMIN')->prefix('master')->name('master.')->group(function () {
         Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update']);
         Route::post('/users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
         Route::post('/users/{user}/activate', [UserController::class, 'activate'])->name('users.activate');
+        Route::delete('/users/{user}/passkeys/{id}', [UserController::class, 'destroyPasskey'])->where('id', '[0-9]{1,18}')->name('users.passkeys.destroy');
     });
 
-    // PKS dan PIC Bouwheer: milik STAFF_PIC dari divisi mana pun. Tidak ada route hapus.
+    // PKS dan PIC Bouwheer: milik STAFF_PIC dari divisi mana pun (keputusan user 2026-10-13). Tidak ada route hapus.
     Route::middleware('role:STAFF_PIC')->prefix('master')->name('master.')->group(function () {
         Route::resource('pks', PksController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['pks' => 'pks']);
         Route::resource('bouwheer-contacts', BouwheerContactController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['bouwheer-contacts' => 'contact']);
@@ -69,7 +86,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('can:create,'.Project::class)->name('projects.store');
     Route::get('/projects/{project}/edit', [ProjectController::class, 'edit'])->middleware('can:update,project')->name('projects.edit');
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->middleware('can:update,project')->name('projects.update');
-    Route::get('/projects/{project}', [ProjectViewController::class, 'show'])->name('projects.show'); // semua role; project di luar jangkauan sudah 404 oleh route binding
+    Route::get('/projects/{project}', [ProjectViewController::class, 'show'])->name('projects.show'); // project di luar jangkauan (termasuk semua project bagi SYSTEM_ADMIN) sudah 404 oleh route binding
     Route::get('/projects/{project}/print', [ProjectViewController::class, 'print'])->name('projects.print'); // versi cetak/PDF; visibilitas sama dengan show (route binding)
     Route::post('/projects/{project}/submit', [ProjectWorkflowController::class, 'submit'])->middleware('can:submit,project')->name('projects.submit');
     Route::post('/projects/{project}/activate', [ProjectWorkflowController::class, 'activate'])->middleware('can:activate,project')->name('projects.activate');
@@ -129,8 +146,20 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Approval Inbox (DSH-02): hanya MANAGER_GM, read-only; keputusan diambil di detail project.
     Route::get('/approvals', [ApprovalInboxController::class, 'index'])->middleware('role:MANAGER_GM')->name('approvals.index');
 
-    // Audit log (AUD-01): read-only. MANAGER_GM hanya project divisinya; DIREKSI dan SYSTEM_ADMIN seluruh sistem.
-    Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:MANAGER_GM,DIREKSI,SYSTEM_ADMIN')->name('audit-logs.index');
+    // Audit log (AUD-01): read-only. MANAGER_GM hanya project divisinya; DIREKSI seluruh sistem. SYSTEM_ADMIN tidak punya akses (keputusan PM 2026-11-16).
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:MANAGER_GM,DIREKSI')->name('audit-logs.index');
+
+    // Lonceng notifikasi (Story E): semua peran, hanya notifikasi milik sendiri. Tidak ada route hapus.
+    Route::get('/notifications/{id}/open', [NotificationController::class, 'open'])->whereUuid('id')->name('notifications.open');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+
+    // Tiket laporan masalah (Story C): semua peran melapor dan melihat tiketnya sendiri; SYSTEM_ADMIN melihat semua dan mengatur status. Tidak ada route hapus.
+    Route::get('/support-tickets', [SupportTicketController::class, 'index'])->name('support-tickets.index');
+    Route::get('/support-tickets/create', [SupportTicketController::class, 'create'])->name('support-tickets.create');
+    Route::post('/support-tickets', [SupportTicketController::class, 'store'])->middleware('throttle:10,1')->name('support-tickets.store');
+    Route::get('/support-tickets/{ticket}', [SupportTicketController::class, 'show'])->where('ticket', '[0-9]{1,18}')->name('support-tickets.show');
+    Route::get('/support-tickets/{ticket}/screenshot', [SupportTicketController::class, 'screenshot'])->where('ticket', '[0-9]{1,18}')->name('support-tickets.screenshot');
+    Route::put('/support-tickets/{ticket}', [SupportTicketController::class, 'update'])->where('ticket', '[0-9]{1,18}')->name('support-tickets.update'); // peran dicek di controller: non-admin 404 seragam
 
     // Tarif pajak: STAFF_PIC menambah versi baru, MANAGER_GM hanya melihat. Tidak ada route ubah atau hapus.
     Route::get('/tax-rates', [TaxRateController::class, 'index'])->middleware('role:STAFF_PIC,MANAGER_GM')->name('tax-rates.index');

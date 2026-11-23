@@ -228,7 +228,7 @@ class FinancialClosingTest extends TestCase
             $url = "/projects/{$this->project->id}/$command";
             $this->actingAs($this->staff)->postJson($url)->assertForbidden();
             $this->actingAs(User::factory()->role('DIREKSI', null)->create())->postJson($url)->assertForbidden();
-            $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->postJson($url)->assertForbidden();
+            $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->postJson($url)->assertNotFound(); // admin: project di luar jangkauan
             $this->actingAs(User::factory()->role('MANAGER_GM', 'CP')->create())->postJson($url)->assertNotFound();
         }
         $this->assertSame('COMPLETED', $this->row()->status);

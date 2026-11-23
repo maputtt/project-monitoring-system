@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-// Revisi B: rata-rata tertimbang, kartu Project Selesai / Margin Realisasi, lingkup grafik, tautan kartu, dan daftar drill-down.
+// Revisi GM 2026-10-22 (B): rata-rata biasa % per project (keputusan PM 2026-11-16, menggantikan tertimbang), kartu Project Selesai / Margin Realisasi, lingkup grafik, tautan kartu, dan daftar drill-down.
 class DashboardDrillDownTest extends TestCase
 {
     use RefreshDatabase;
@@ -31,7 +31,7 @@ class DashboardDrillDownTest extends TestCase
         $this->direksi = User::factory()->role('DIREKSI', null)->create();
 
         // BM: aktif (ditugaskan ke staff), selesai, tutup buku, diarsip (pernah tutup / tanpa laba), draf, diajukan. CP: aktif dan tutup buku.
-        // Dasar margin dan target dipilih supaya rata-rata tertimbang (17,5%) berbeda dari rata-rata sederhana (15%).
+        // Dasar margin dan target dipilih supaya rata-rata biasa (15%) berbeda dari tertimbang (17,5%); archived_no_profit berdasar 0 harus dikeluarkan (dengannya 12%).
         $this->project('active', 'ACTIVE', '1000.00', '1000.00', '100.00', null, true);
         $this->project('done', 'COMPLETED', '3000.00', '3000.00', '600.00');
         $this->project('closed', 'FINANCIALLY_CLOSED', '1000.00', '1000.00', '100.00', '150.00');
@@ -78,20 +78,53 @@ class DashboardDrillDownTest extends TestCase
         return array_values(array_unique($m[0]));
     }
 
-    public function test_weighted_target_margin_percent_and_project_counts(): void
+    public function test_simple_average_target_margin_percent_and_project_counts(): void
     {
         $kpi = $this->actingAs($this->manager)->get('/dashboard')->assertOk()->viewData('kpi');
-        // Teraktivasi BM: active, done, closed, archived, archived_no_profit. Σ target 1400, Σ dasar 8000 = 17,5% (rata-rata sederhana 15%).
-        $this->assertSame(['activated' => 5, 'projects' => 1, 'completed' => 1, 'contract' => '8010.00', 'margin' => '1400.00', 'margin_pct' => '17.50'],
-            array_intersect_key($kpi, array_flip(['activated', 'projects', 'completed', 'contract', 'margin', 'margin_pct'])));
-        $this->actingAs($this->manager)->get('/dashboard')->assertSee('17,5% dari dasar margin')->assertSee('Project Selesai')->assertSee('belum tutup buku');
+        // Target Margin hanya berjalan+selesai (keputusan PM 2026-11-16): active 100 + done 600 = 700; % per project 10 dan 20 = 15%. Project tutup buku/arsip tidak ikut.
+        $this->assertSame(['activated' => 5, 'projects' => 1, 'completed' => 1, 'open_count' => 2, 'margin' => '700.00', 'margin_pct' => '15.00'],
+            array_intersect_key($kpi, array_flip(['activated', 'projects', 'completed', 'open_count', 'margin', 'margin_pct'])));
+        $this->actingAs($this->manager)->get('/dashboard')->assertSee('15% dari dasar margin (rata-rata)')->assertSee('Project Selesai')->assertSee('belum tutup buku');
+    }
+
+    public function test_rab_changed_counts_only_open_projects_whose_rab_differs_and_matches_its_list(): void
+    {
+        DB::table('projects')->update(['initial_rab' => '1000.00']); // semua RAB belum berubah (effective_rab fixture 1000.00)
+        DB::table('projects')->where('id', $this->p['active']->id)->update(['effective_rab' => '1100.00']);    // berjalan, berubah: dihitung
+        DB::table('projects')->where('id', $this->p['closed']->id)->update(['effective_rab' => '1200.00']);    // tutup buku, berubah: tidak dihitung
+        DB::table('projects')->where('id', $this->p['cp_active']->id)->update(['effective_rab' => '1500.00']); // divisi CP
+
+        $kpi = $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi');
+        $this->assertArrayNotHasKey('rab', $kpi);
+        $this->assertSame(1, $kpi['rab_changed']);
+        $page = $this->actingAs($this->manager)->get(route('dashboard.projects', 'rab_changed'))->assertOk()->assertSee('Project Perubahan RAB')->assertSee('RAB awal Rp1.000,00');
+        $this->assertSame($kpi['rab_changed'], $page->viewData('projects')->total());
+        $this->assertSame(['DD-ACTIVE'], $this->codes($this->manager, route('dashboard.projects', 'rab_changed')));
+
+        $this->assertSame(2, $this->actingAs($this->direksi)->get('/dashboard')->viewData('kpi')['rab_changed']);
+        $this->assertSame(['DD-CP_ACTIVE'], $this->codes($this->direksi, route('dashboard.projects', 'rab_changed').'?department=CP'));
+    }
+
+    public function test_total_nilai_project_covers_open_projects_and_closed_value_has_its_own_card(): void
+    {
+        // BM berjalan+selesai: active 1000 + done 3000 = 4000; tutup buku berlaba: closed 1000 + archived 3000 = 4000 (archived_no_profit dan draf/diajukan tidak ikut).
+        $this->invoice('active', 1, 'INVOICE_SUBMITTED', '10.00');
+        $this->invoice('active', 2, 'PLANNED', null);
+        $this->invoice('active', 3, 'PAID', '30.00');
+        $this->invoice('active', 4, 'CANCELLED', null);
+        $this->invoice('closed', 1, 'WAITING_FOR_PAYMENT', '20.00'); // project teraktivasi, jadi ikut hitungan outstanding
+        $kpi = $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi');
+        $this->assertSame([2, '4000.00', 2, '4000.00', 2], [$kpi['open_count'], $kpi['contract'], $kpi['realized_count'], $kpi['closed_contract'], $kpi['outstanding_count']]);
+        $this->assertArrayNotHasKey('outstanding', $kpi);
+        $cp = $this->actingAs($this->direksi)->get('/dashboard?department=CP')->viewData('kpi');
+        $this->assertSame([1, '5000.00', 1, '9000.00'], [$cp['open_count'], $cp['contract'], $cp['realized_count'], $cp['closed_contract']]);
     }
 
     public function test_margin_realisasi_counts_only_closed_projects_with_actual_profit(): void
     {
         $kpi = $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi');
-        // closed 150 + archived 50 = 200 atas dasar 1000 + 3000; archived_no_profit (laba kosong) dan CP tidak ikut.
-        $this->assertSame([2, '200.00', '5.00'], [$kpi['realized_count'], $kpi['realized'], $kpi['realized_pct']]);
+        // closed 150 + archived 50 = 200; persen = rata-rata biasa (15,00 + 1,67)/2 = 8,335 -> 8,34; archived_no_profit (laba kosong) dan CP tidak ikut.
+        $this->assertSame([2, '200.00', '8.34'], [$kpi['realized_count'], $kpi['realized'], $kpi['realized_pct']]);
         $cp = $this->actingAs($this->direksi)->get('/dashboard?department=CP')->viewData('kpi');
         $this->assertSame([1, '999.00', '11.10'], [$cp['realized_count'], $cp['realized'], $cp['realized_pct']]);
     }
@@ -127,12 +160,20 @@ class DashboardDrillDownTest extends TestCase
         $r->assertSee(route('dashboard.projects', 'open'), false);
     }
 
+    public function test_dashboard_renders_the_three_revised_cards_for_every_role_but_admin(): void
+    {
+        $this->invoice('active', 1, 'INVOICE_SUBMITTED', '10.00');
+        foreach ([$this->staff, $this->manager, $this->direksi] as $user) {
+            $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee('Total Nilai Project Tutup Buku')->assertSee('Termin belum lunas');
+        }
+    }
+
     public function test_every_card_links_to_its_list_and_department_filter_is_carried(): void
     {
         $this->invoice('active', 1, 'INVOICE_SUBMITTED', '50.00');
         $manager = $this->actingAs($this->manager)->get('/dashboard')->assertOk();
-        foreach ([route('dashboard.projects', 'activated'), route('dashboard.projects', 'active'), route('dashboard.projects', 'completed'), route('dashboard.projects', 'prospects'), route('dashboard.projects', 'open'),
-            route('dashboard.margin'), route('dashboard.overbudget'), route('approvals.index'), route('invoices.index', ['outstanding' => 1]), route('invoices.index', ['status' => 'PAID']), route('invoices.index', ['late_to_bill' => 1])] as $href) {
+        foreach ([route('dashboard.projects', 'rab_changed'), route('dashboard.projects', 'active'), route('dashboard.projects', 'completed'), route('dashboard.projects', 'prospects'), route('dashboard.projects', 'open'),
+            route('dashboard.margin'), route('dashboard.overbudget'), route('approvals.index'), route('invoices.index', ['outstanding' => 1]), route('invoices.index', ['late_to_bill' => 1])] as $href) {
             $manager->assertSee('href="'.e($href).'"', false);
         }
 
@@ -144,10 +185,8 @@ class DashboardDrillDownTest extends TestCase
         $direksi->assertDontSee('href="'.route('approvals.index').'"', false); // antrean hanya untuk Manager/GM: kartu tetap tampil tanpa tautan
         $direksi->assertSee('Approval pending');
 
-        // Staff: antrean tertutup; SYSTEM_ADMIN: /invoices juga tertutup, tetapi daftar dashboard tetap terbuka.
+        // Staff: antrean tertutup.
         $this->actingAs($this->staff)->get('/dashboard')->assertDontSee('href="'.route('approvals.index').'"', false)->assertSee('href="'.e(route('invoices.index', ['outstanding' => 1])).'"', false);
-        $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
-        $this->actingAs($admin)->get('/dashboard')->assertDontSee('/invoices')->assertDontSee('/approvals')->assertSee('href="'.route('dashboard.margin').'"', false);
     }
 
     public function test_project_lists_show_the_right_statuses_within_visibility(): void
@@ -168,17 +207,26 @@ class DashboardDrillDownTest extends TestCase
         $this->actingAs($this->direksi)->get(route('dashboard.projects', 'active').'?department=XX')->assertSessionHasErrors('department');
     }
 
-    public function test_list_routes_reject_unknown_group_and_guests_but_open_for_every_role(): void
+    public function test_list_routes_reject_unknown_group_and_guests_but_open_for_every_role_but_admin(): void
     {
         $this->get(route('dashboard.margin'))->assertRedirect('/login');
         $this->get(route('dashboard.overbudget'))->assertRedirect('/login');
         $this->actingAs($this->manager)->get('/dashboard/projects/closed')->assertNotFound();
-        $admin = User::factory()->role('SYSTEM_ADMIN', null)->create();
-        foreach ([$this->staff, $this->manager, $this->direksi, $admin] as $user) {
+        foreach ([$this->staff, $this->manager, $this->direksi] as $user) {
             foreach ([route('dashboard.projects', 'open'), route('dashboard.margin'), route('dashboard.overbudget')] as $url) {
                 $this->actingAs($user)->get($url)->assertOk();
             }
         }
+    }
+
+    public function test_rab_changed_list_has_same_authorization_as_other_groups(): void
+    {
+        $this->get(route('dashboard.projects', 'rab_changed'))->assertRedirect('/login');
+        foreach ([$this->staff, $this->manager, $this->direksi] as $user) {
+            $this->actingAs($user)->get(route('dashboard.projects', 'rab_changed'))->assertOk();
+            $this->actingAs($user)->get('/dashboard/projects/rab_changed_x')->assertNotFound();
+        }
+        $this->actingAs($this->direksi)->get(route('dashboard.projects', 'rab_changed').'?department=XX')->assertSessionHasErrors('department');
     }
 
     public function test_overbudget_list_scope_columns_and_link(): void
@@ -201,14 +249,14 @@ class DashboardDrillDownTest extends TestCase
         $this->assertSame(1, $this->actingAs($this->staff)->get(route('dashboard.overbudget'))->viewData('items')->total()); // hanya project ditugaskan
     }
 
-    public function test_margin_list_totals_are_weighted_and_scope_is_closed_with_profit(): void
+    public function test_margin_list_totals_are_simple_averages_and_scope_is_closed_with_profit(): void
     {
         $page = $this->actingAs($this->manager)->get(route('dashboard.margin'))->assertOk();
         $this->assertEqualsCanonicalizing(['DD-CLOSED', 'DD-ARCHIVED'], $this->codes($this->manager, route('dashboard.margin')));
         $totals = $page->viewData('totals');
-        $this->assertSame(['4000.00', '700.00', '200.00', '4000.00'], [$totals->contract, $totals->target, $totals->actual, $totals->base]);
-        // Target 700/4000 = 17,5%; realisasi 200/4000 = 5%; baris: closed 150/1000 = 15%, archived 50/3000 = 1,67%.
-        $page->assertSee('Rp700,00 · 17,5%', false)->assertSee('Rp200,00 · 5%', false)->assertSee('Rp150,00 · 15%', false)->assertSee('Rp50,00 · 1,67%', false)->assertDontSee('DD-CP_CLOSED');
+        $this->assertSame(['4000.00', '700.00', '200.00', '15.00', '8.34'], [$totals->contract, $totals->target, $totals->actual, $page->viewData('targetPct'), $page->viewData('actualPct')]);
+        // Target (10% + 20%)/2 = 15%; realisasi (15% + 1,67%)/2 = 8,34%; baris: closed 150/1000 = 15%, archived 50/3000 = 1,67%.
+        $page->assertSee('Rp700,00 · 15%', false)->assertSee('Rp200,00 · 8,34%', false)->assertSee('Rp150,00 · 15%', false)->assertSee('Rp50,00 · 1,67%', false)->assertDontSee('DD-CP_CLOSED');
 
         $this->assertSame(['DD-CP_CLOSED'], $this->codes($this->direksi, route('dashboard.margin', ['department' => 'CP'])));
         $this->actingAs($this->staff)->get(route('dashboard.margin'))->assertSee('Belum ada project tutup buku'); // staff tidak ditugaskan ke project tutup buku
@@ -220,7 +268,7 @@ class DashboardDrillDownTest extends TestCase
             $this->invoice('active', $seq, $status, $subtotal);
         }
         $this->invoice('cp_active', 1, 'INVOICE_VERIFIED', '5.00');
-        $this->assertSame('70.00', $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi')['outstanding']);
+        $this->assertSame(3, $this->actingAs($this->manager)->get('/dashboard')->viewData('kpi')['outstanding_count']); // sama dengan jumlah baris /invoices?outstanding=1
         $list = $this->actingAs($this->manager)->get('/invoices?outstanding=1')->assertOk()->viewData('invoices');
         $this->assertSame(3, $list->total());
         $this->assertEqualsCanonicalizing(['INVOICE_SUBMITTED', 'WAITING_FOR_PAYMENT', 'PAYMENT_SUBMITTED'], collect($list->items())->pluck('workflow_status')->all());

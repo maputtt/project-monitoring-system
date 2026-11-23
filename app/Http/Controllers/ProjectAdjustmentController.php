@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Support\Audit;
 use App\Support\DocumentStore;
 use App\Support\Money;
+use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -71,6 +72,8 @@ class ProjectAdjustmentController extends Controller
             throw $e;
         }
 
+        Notify::send('awaiting', $project, $user, $project->project_code.': penyesuaian menunggu persetujuan');
+
         return redirect()->route('projects.show', $project)->with('status', self::LABELS[$type].' diajukan. Project berubah setelah Manager/GM menyetujui.');
     }
 
@@ -100,6 +103,8 @@ class ProjectAdjustmentController extends Controller
             $key && Storage::disk(DocumentStore::DISK)->delete($key);
             throw $e;
         }
+
+        Notify::send('awaiting', $project, $user, $project->project_code.': penyesuaian diajukan ulang');
 
         return redirect()->route('projects.show', $project)->with('status', self::LABELS[$current->adjustment_type].' diajukan ulang.');
     }
@@ -144,6 +149,8 @@ class ProjectAdjustmentController extends Controller
             Audit::record(AuditAction::APPROVE, 'PROJECT_ADJUSTMENT', $adjustment, $old + ['status' => $row->status], $new + ['status' => 'APPROVED']);
         });
 
+        Notify::send('decided', $project, $user, $project->project_code.': penyesuaian disetujui');
+
         return redirect()->route('projects.show', $project)->with('status', match ($current->adjustment_type) {
             'CONTRACT_VALUE' => 'Koreksi Nilai Tertagih disetujui. Nilai tertagih, target margin, dan RAB Perubahan sudah diperbarui; Nilai Project dan RAB Awal tidak berubah.',
             'BILLING_PERCENTAGE' => 'Koreksi Persentase Termin disetujui. Persentase dan nilai rencana termin yang belum ditagih sudah diperbarui; nilai project tidak berubah.',
@@ -165,6 +172,8 @@ class ProjectAdjustmentController extends Controller
             DB::table('project_adjustments')->where('id', $adjustment)->update(['status' => 'REVISION_REQUIRED', 'revision_requested_by' => $user->id, 'revision_requested_at' => now(), 'revision_reason' => $reason]);
             Audit::record(AuditAction::REQUEST_REVISION, 'PROJECT_ADJUSTMENT', $adjustment, ['status' => $row->status], ['status' => 'REVISION_REQUIRED'], $reason);
         });
+
+        Notify::send('decided', $project, $user, $project->project_code.': penyesuaian perlu revisi');
 
         return redirect()->route('projects.show', $project)->with('status', 'Penyesuaian dikembalikan untuk direvisi.');
     }
@@ -225,7 +234,7 @@ class ProjectAdjustmentController extends Controller
         return [$project, $current];
     }
 
-    /** Kunci baris project, lalu cek ulang di bawah kunci: TARGET_MARGIN hanya untuk project ACTIVE, CONTRACT_VALUE juga COMPLETED. */
+    /** Kunci baris project, lalu cek ulang di bawah kunci: TARGET_MARGIN hanya untuk project ACTIVE, CONTRACT_VALUE juga COMPLETED (keputusan perlu dikonfirmasi tech-lead). */
     private function lockProject(int $id, string $type): Project
     {
         $locked = Project::query()->lockForUpdate()->findOrFail($id);

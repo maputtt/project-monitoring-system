@@ -10,9 +10,9 @@ use Illuminate\Validation\ValidationException;
  * Pajak satu invoice (PRD 5.5 dan 6.3), dipakai bersama oleh submit dan pratinjau supaya angkanya pasti sama.
  *
  * Persentase termin adalah persentase nilai SPK awal (initial_contract_value), jadi termin PLANNED tidak ikut menyusut setelah koreksi nilai kontrak.
- * DPP total kontrak: INCLUSIVE_PPN = nilai kontrak / (1 + PPN), EXCLUSIVE_PPN dan NON_PPN = nilai kontrak apa adanya.
- * DPP invoice = bagian termin ini dari DPP total lewat Money::allocate (jumlah seluruh termin tepat sama dengan DPP total, termin terakhir menyerap selisih).
- * PPN = DPP x tarif PPN (NON_PPN: 0), subtotal = DPP + PPN, PPh = DPP x tarif PPh, diterima bersih = subtotal - PPh.
+ * Bagian termin = Money::allocate(nilai kontrak, persentase): INCLUSIVE_PPN = subtotal (bruto), EXCLUSIVE_PPN dan NON_PPN = DPP. Jumlah seluruh subtotal tepat sama dengan nilai kontrak.
+ * Termin bukan terakhir: INCLUSIVE DPP = bagian / (1 + PPN), ppn = subtotal - DPP; EXCLUSIVE PPN = bagian x tarif PPN, subtotal = DPP + PPN; NON_PPN PPN 0.
+ * Termin terakhir menyerap seluruh selisih kumulatif (DPP, PPN, subtotal): angka turunannya = nilai untuk total kontrak - jumlah termin sebelumnya. PPh = DPP x tarif PPh, diterima bersih = subtotal - PPh.
  */
 final class InvoiceTax
 {
@@ -25,10 +25,26 @@ final class InvoiceTax
      */
     public static function calculate(string $contractValue, string $taxMode, array $percentages, int $index, string $ppnRate, string $pphRate): array
     {
-        $dppTotal = $taxMode === 'INCLUSIVE_PPN' ? Money::removeTax($contractValue, $ppnRate) : Money::round($contractValue);
-        $dpp = Money::allocate($dppTotal, $percentages)[$index];
-        $ppn = $taxMode === 'NON_PPN' ? '0.00' : Money::percentOf($dpp, $ppnRate);
-        $subtotal = Money::add($dpp, $ppn);
+        $shares = Money::allocate($contractValue, $percentages);
+        // Angka turunan share: INCLUSIVE = DPP, EXCLUSIVE = PPN, NON_PPN = 0.
+        $derive = fn (string $v) => match ($taxMode) {
+            'INCLUSIVE_PPN' => Money::removeTax($v, $ppnRate),
+            'EXCLUSIVE_PPN' => Money::percentOf($v, $ppnRate),
+            default => '0.00',
+        };
+        $x = $index === array_key_last($percentages)
+            ? Money::sub($derive(Money::round($contractValue)), Money::add(...array_map($derive, array_slice($shares, 0, $index))))
+            : $derive($shares[$index]);
+
+        if ($taxMode === 'INCLUSIVE_PPN') {
+            $subtotal = $shares[$index];
+            $dpp = $x;
+            $ppn = Money::sub($subtotal, $dpp);
+        } else {
+            $dpp = $shares[$index];
+            $ppn = $x;
+            $subtotal = Money::add($dpp, $ppn);
+        }
         $pph = Money::percentOf($dpp, $pphRate);
 
         return ['dpp_amount' => $dpp, 'ppn_amount' => $ppn, 'subtotal_amount' => $subtotal, 'pph_amount' => $pph, 'net_received_amount' => Money::sub($subtotal, $pph)];

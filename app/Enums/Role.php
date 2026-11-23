@@ -26,7 +26,7 @@ enum Role: string
     }
 
     /**
-     * Menu utama per role. Hanya untuk tampilan; hak akses tetap diperiksa di server.
+     * Menu utama per role (docs/UX_FLOWS.md). Hanya untuk tampilan; hak akses tetap diperiksa di server.
      *
      * @return list<array{label: string, path: string}>
      */
@@ -40,7 +40,8 @@ enum Role: string
             ['Tarif Pajak', '/tax-rates', [self::STAFF_PIC, self::MANAGER_GM]],
             ['Data Master', '/master/pks', [self::STAFF_PIC]],
             ['Pengguna', '/master/users', [self::SYSTEM_ADMIN]],
-            ['Audit Log', '/audit-logs', [self::MANAGER_GM, self::DIREKSI, self::SYSTEM_ADMIN]],
+            ['Tiket', '/support-tickets', [self::SYSTEM_ADMIN]],
+            ['Audit Log', '/audit-logs', [self::MANAGER_GM, self::DIREKSI]],
         ];
 
         return array_values(array_map(

@@ -1,6 +1,6 @@
 @php
     use App\Support\Money;
-    $filtered = filled($filters['q'] ?? null) || filled($filters['status'] ?? null);
+    $filtered = filled($filters['q'] ?? null) || filled($filters['status'] ?? null) || filled($filters['department'] ?? null);
     $isStaff = auth()->user()->role === \App\Enums\Role::STAFF_PIC;
 @endphp
 <x-layouts.app title="PKS & Projects">
@@ -11,10 +11,20 @@
         @endif
     </div>
 
-    <form method="GET" action="{{ route('projects.index') }}" class="card mb-6 grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_14rem_auto] sm:items-end sm:p-5">
+    <form method="GET" action="{{ route('projects.index') }}" class="card mb-6 grid gap-3 p-4 {{ $departments ? 'sm:grid-cols-[minmax(0,1fr)_12rem_14rem_auto]' : 'sm:grid-cols-[minmax(0,1fr)_14rem_auto]' }} sm:items-end sm:p-5">
         <label class="lbl">Cari
             <input type="search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="100" placeholder="Kode project, nama project, atau nomor PKS" class="inp">
         </label>
+        @if ($departments)
+            <label class="lbl">Divisi
+                <select name="department" class="inp">
+                    <option value="">Semua divisi</option>
+                    @foreach ($departments as $d)
+                        <option value="{{ $d->value }}" @selected(($filters['department'] ?? null) === $d->value)>{{ $d->value }}</option>
+                    @endforeach
+                </select>
+            </label>
+        @endif
         <label class="lbl">Status
             <select name="status" class="inp">
                 <option value="">Semua status</option>

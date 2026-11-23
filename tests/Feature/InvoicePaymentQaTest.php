@@ -232,7 +232,7 @@ class InvoicePaymentQaTest extends TestCase
         foreach (['PLANNED', 'INVOICE_SUBMITTED', 'INVOICE_REVISION_REQUIRED', 'INVOICE_VERIFIED', 'WAITING_FOR_PAYMENT', 'PAYMENT_REVISION_REQUIRED', 'PAID', 'CANCELLED'] as $s) {
             $this->invoice($s);
         }
-        $users = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $users = [$this->staff, $this->manager, User::factory()->role('DIREKSI', null)->create()];
         foreach (['ACTIVE', 'COMPLETED', 'FINANCIALLY_CLOSED'] as $status) {
             DB::table('projects')->where('id', $this->project->id)->update(['status' => $status]);
             foreach ($users as $u) {

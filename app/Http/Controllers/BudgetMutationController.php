@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Support\Audit;
 use App\Support\DocumentStore;
 use App\Support\Money;
+use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -50,6 +51,8 @@ class BudgetMutationController extends Controller
             throw $e;
         }
 
+        Notify::send('awaiting', $project, $user, $project->project_code.': relokasi budget menunggu persetujuan');
+
         return redirect()->route('projects.show', $project)->with('status', 'Relokasi Budget diajukan. Saldo baru berubah setelah Manager/GM menyetujui.');
     }
 
@@ -78,6 +81,8 @@ class BudgetMutationController extends Controller
             $key && Storage::disk(DocumentStore::DISK)->delete($key);
             throw $e;
         }
+
+        Notify::send('awaiting', $project, $user, $project->project_code.': relokasi budget diajukan ulang');
 
         return redirect()->route('projects.show', $project)->with('status', 'Relokasi Budget diajukan ulang.');
     }
@@ -135,6 +140,8 @@ class BudgetMutationController extends Controller
             Audit::record(AuditAction::APPROVE, 'BQ_MUTATION', $mutation, $before, $after);
         });
 
+        Notify::send('decided', $project, $user, $project->project_code.': relokasi budget disetujui');
+
         return redirect()->route('projects.show', $project)->with('status', 'Relokasi Budget disetujui. Saldo BQ sudah diperbarui.');
     }
 
@@ -152,6 +159,8 @@ class BudgetMutationController extends Controller
             DB::table('bq_budget_mutations')->where('id', $mutation)->update(['status' => 'REVISION_REQUIRED', 'revision_requested_by' => $user->id, 'revision_requested_at' => now(), 'revision_reason' => $reason]);
             Audit::record(AuditAction::REQUEST_REVISION, 'BQ_MUTATION', $mutation, ['status' => $row->status], ['status' => 'REVISION_REQUIRED'], $reason);
         });
+
+        Notify::send('decided', $project, $user, $project->project_code.': relokasi budget perlu revisi');
 
         return redirect()->route('projects.show', $project)->with('status', 'Relokasi Budget dikembalikan untuk direvisi.');
     }

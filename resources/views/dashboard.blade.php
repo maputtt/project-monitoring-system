@@ -9,12 +9,12 @@
     $pct = fn ($v) => str_replace('.', ',', rtrim(rtrim(Money::round($v), '0'), '.')).'%'; // "40.00" menjadi "40%", "33.33" menjadi "33,33%"
     $stripe = 'bg-[repeating-linear-gradient(45deg,#fcd34d_0_4px,#fef3c7_4px_8px)]'; // pola garis supaya "pending" tidak hanya dibedakan warna
     $isManager = $user->role === Role::MANAGER_GM;
-    $canInvoices = in_array($user->role, [Role::STAFF_PIC, Role::MANAGER_GM, Role::DIREKSI], true); // /invoices tertutup bagi SYSTEM_ADMIN
+    $canInvoices = in_array($user->role, [Role::STAFF_PIC, Role::MANAGER_GM, Role::DIREKSI], true);
     $dq = $department ? ['department' => $department] : []; // filter divisi Direksi ikut ke setiap daftar
     $link = 'text-sm font-medium text-brand-blue hover:underline focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 focus-visible:outline-none rounded';
 @endphp
 <x-layouts.app title="Dashboard">
-    {{-- Sambutan: nama, peran, tanggal. Filter divisi hanya untuk DIREKSI dan SYSTEM_ADMIN (STAFF_PIC dan MANAGER_GM terkunci pada divisinya). --}}
+    {{-- Sambutan: nama, peran, tanggal. Filter divisi hanya untuk DIREKSI (STAFF_PIC dan MANAGER_GM terkunci pada divisinya). --}}
     <header class="relative mb-6 overflow-hidden rounded-3xl bg-linear-to-br from-brand-navy via-brand-blue-dark to-brand-blue p-5 text-white shadow-card sm:p-7">
         <x-motif class="-right-8 -bottom-10 h-36 w-36 opacity-35 sm:-right-10 sm:-bottom-16 sm:h-60 sm:w-60" />
         <div class="relative flex flex-col gap-5">
@@ -61,21 +61,21 @@
         <div class="card empty mb-6" role="status"><p>Belum ada project di jangkauan Anda.</p></div>
     @endif
 
-    {{-- Ringkasan finansial. Tiap kartu menaut ke daftar asalnya (drill-down); semua angka dari controller. --}}
+    {{-- Ringkasan Project. Tiap kartu menaut ke daftar asalnya (drill-down); semua angka dari controller. --}}
     <section class="mb-6 space-y-4" aria-labelledby="ringkasan">
-        <h2 id="ringkasan">Ringkasan finansial</h2>
+        <x-section-heading id="ringkasan" icon="wallet">Ringkasan Project</x-section-heading>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <x-kpi-card label="Total Nilai Project" tip="Total nilai SPK project Berjalan, Selesai, dan Tutup Buku. Draf dan Diajukan tidak dihitung." :value="$kpi['contract']" icon="wallet" tone="blue" :context="'Dari '.$n($kpi['activated']).' project (berjalan, selesai, tutup buku)'" :href="route('dashboard.projects', ['group' => 'activated'] + $dq)" />
-            <x-kpi-card label="RAB Perubahan" tip="Batas biaya terkini. Rumus: Dasar Margin − Target Margin. Berubah jika penyesuaian margin disetujui." :value="$kpi['rab']" icon="/invoices" tone="purple" context="Batas biaya setelah target margin" :href="route('dashboard.projects', ['group' => 'activated'] + $dq)" />
-            <x-kpi-card label="Target Margin" tip="Rumus: Total Target Margin ÷ Total Dasar Margin × 100%. Dasar Margin = Nilai Project (+PPN jika Exclusive PPN)." :value="$kpi['margin']" icon="check" tone="emerald" :context="$pct($kpi['margin_pct']).' dari dasar margin (rata-rata tertimbang)'" :href="route('dashboard.projects', ['group' => 'activated'] + $dq)" />
-            <x-kpi-card label="Margin Realisasi" tip="Laba aktual project Tutup Buku. Rumus: Target Margin + Sisa Akhir (Tutup Buku). Persen = Total Laba Aktual ÷ Total Dasar Margin × 100%." :value="$kpi['realized']" icon="check" :tone="Money::compare($kpi['realized'], 0) < 0 ? 'rose' : 'emerald'" :context="$kpi['realized_count'] > 0 ? $pct($kpi['realized_pct']).' dari dasar margin · '.$n($kpi['realized_count']).' project tutup buku' : 'Belum ada project tutup buku'" :href="route('dashboard.margin', $dq)" />
-            <x-kpi-card label="Tagihan Belum Lunas" tip="Invoice yang sudah ditagih tapi belum dibayar." :value="$kpi['outstanding']" icon="/invoices" tone="orange" context="Sudah ditagih, belum dibayar" :href="$canInvoices ? route('invoices.index', ['outstanding' => 1] + $dq) : null" />
-            <x-kpi-card label="Uang Diterima (Nett)" tip="Uang masuk dari invoice Lunas, setelah dipotong PPh." :value="$kpi['nett']" icon="check" tone="emerald" context="dari invoice Lunas, setelah dipotong PPh" :href="$canInvoices ? route('invoices.index', ['status' => 'PAID'] + $dq) : null" />
+            <x-kpi-card label="Total Nilai Project" tip="Total nilai SPK project Berjalan dan Selesai. Tutup Buku, Draf, dan Diajukan tidak dihitung." :value="$kpi['contract']" icon="wallet" tone="blue" :context="'Dari '.$n($kpi['open_count']).' project (berjalan, selesai)'" :href="route('dashboard.projects', ['group' => 'open'] + $dq)" />
+            <x-kpi-card label="Project Perubahan RAB" tip="Project Berjalan dan Selesai yang RAB-nya sudah berubah dari RAB awal (lewat penyesuaian yang disetujui)." :value="$n($kpi['rab_changed'])" :money="false" icon="/invoices" tone="purple" :context="$kpi['rab_changed'] > 0 ? 'RAB berbeda dari RAB awal. Lihat daftar' : 'Belum ada project yang RAB-nya berubah'" :href="route('dashboard.projects', ['group' => 'rab_changed'] + $dq)" />
+            <x-kpi-card label="Target Margin" tip="Target margin project Berjalan dan Selesai. Rumus persen: rata-rata % target margin per project (jumlah % ÷ jumlah project). % per project = Target Margin ÷ Dasar Margin × 100%. Dasar Margin = Nilai Project (+PPN jika Exclusive PPN)." :value="$kpi['margin']" icon="check" tone="emerald" :context="$pct($kpi['margin_pct']).' dari dasar margin (rata-rata)'" :href="route('dashboard.projects', ['group' => 'open'] + $dq)" />
+            <x-kpi-card label="Margin Realisasi" tip="Laba aktual project Tutup Buku. Rumus: Target Margin + Sisa Akhir (Tutup Buku). Persen = rata-rata % laba aktual per project (jumlah % ÷ jumlah project); % per project = Laba Aktual ÷ Dasar Margin × 100%." :value="$kpi['realized']" icon="check" :tone="Money::compare($kpi['realized'], 0) < 0 ? 'rose' : 'emerald'" :context="$kpi['realized_count'] > 0 ? $pct($kpi['realized_pct']).' dari dasar margin · '.$n($kpi['realized_count']).' project tutup buku' : 'Belum ada project tutup buku'" :href="route('dashboard.margin', $dq)" />
+            <x-kpi-card label="Total Nilai Project Tutup Buku" tip="Total nilai SPK project yang sudah Tutup Buku." :value="$kpi['closed_contract']" icon="lock" tone="emerald" :context="$kpi['realized_count'] > 0 ? $n($kpi['realized_count']).' project tutup buku' : 'Belum ada project tutup buku'" :href="route('dashboard.margin', $dq)" />
+            <x-kpi-card label="BQ Overbudget" tip="Item BQ yang biayanya melebihi Nilai RAB-nya." :value="$n($kpi['overbudget'])" :money="false" icon="alert" :tone="$kpi['overbudget'] > 0 ? 'rose' : 'slate'" :context="$kpi['overbudget'] > 0 ? 'Item BQ melewati budget' : 'Tidak ada item BQ yang melewati budget'" :href="route('dashboard.overbudget', $dq)" />
         </div>
     </section>
 
     <section class="mb-6 space-y-4" aria-labelledby="status-project">
-        <h2 id="status-project">Status project</h2>
+        <x-section-heading id="status-project" icon="/projects">Status project</x-section-heading>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <x-kpi-card label="Project Aktif/Berjalan" tip="Project yang sedang berjalan." :value="$n($kpi['projects'])" :money="false" icon="/projects" tone="blue" :context="$scope" :href="route('dashboard.projects', ['group' => 'active'] + $dq)" />
             <x-kpi-card label="Project Selesai" tip="Project selesai dikerjakan, belum tutup buku." :value="$n($kpi['completed'])" :money="false" icon="check" tone="purple" context="belum tutup buku" :href="route('dashboard.projects', ['group' => 'completed'] + $dq)" />
@@ -87,14 +87,16 @@
     </section>
 
     <section class="mb-6 space-y-4" aria-labelledby="perhatian">
-        <h2 id="perhatian">Perlu perhatian</h2>
+        <x-section-heading id="perhatian" icon="alert">Perlu perhatian</x-section-heading>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <x-kpi-card label="BQ overbudget" tip="Item BQ yang biayanya melebihi Nilai RAB-nya." :value="$n($kpi['overbudget'])" :money="false" icon="alert" :tone="$kpi['overbudget'] > 0 ? 'rose' : 'slate'" :context="$kpi['overbudget'] > 0 ? 'Item BQ melewati budget' : 'Tidak ada item BQ yang melewati budget'" :href="route('dashboard.overbudget', $dq)" />
             {{-- Antrean persetujuan hanya ada untuk MANAGER_GM; peran lain melihat angkanya tanpa tautan. --}}
             <x-kpi-card label="Approval pending" tip="Pengajuan yang menunggu keputusan Manager/GM." :value="$n($kpi['pending'])" :money="false" icon="/approvals" :tone="$kpi['pending'] > 0 ? 'amber' : 'slate'" context="Menunggu keputusan Manager/GM" :href="$isManager ? route('approvals.index') : null" />
             {{-- Termin PLANNED yang tanggal rencananya sudah lewat; menaut ke daftar invoice terfilter. Netral bila 0. --}}
             <x-kpi-card label="Termin terlambat ditagih" tip="Termin yang belum ditagih padahal tanggal rencana tagihnya sudah lewat." :value="$n($late_to_bill)" :money="false" icon="alert" :tone="$late_to_bill > 0 ? 'amber' : 'slate'" :context="$late_to_bill > 0 ? 'Lewat tanggal rencana tagih. Lihat daftar' : 'Tidak ada termin yang lewat tanggal rencana tagih'"
                 :href="$canInvoices ? route('invoices.index', ['late_to_bill' => 1] + $dq) : null" :aria="$n($late_to_bill).' termin terlambat ditagih, buka daftar invoice'" />
+            {{-- Termin sudah ditagih tapi belum dibayar (jumlah termin, bukan nominal); menaut ke daftar invoice terfilter. Netral bila 0. --}}
+            <x-kpi-card label="Termin belum lunas" tip="Termin yang sudah ditagih tapi belum dibayar." :value="$n($kpi['outstanding_count'])" :money="false" icon="alert" :tone="$kpi['outstanding_count'] > 0 ? 'amber' : 'slate'" :context="$kpi['outstanding_count'] > 0 ? 'Sudah ditagih, belum dibayar. Lihat daftar' : 'Tidak ada termin yang belum lunas'"
+                :href="$canInvoices ? route('invoices.index', ['outstanding' => 1] + $dq) : null" :aria="$n($kpi['outstanding_count']).' termin belum lunas, buka daftar invoice'" />
             {{-- Termin yang catatan progres penagihan terbarunya bertanda kendala (belum Lunas/Dibatalkan). --}}
             <x-kpi-card label="Kendala aktif" tip="Termin yang progres terakhirnya ditandai kendala dan belum lunas." :value="$n($issues)" :money="false" icon="alert" :tone="$issues > 0 ? 'amber' : 'slate'" :context="$issues > 0 ? 'Termin dengan kendala penagihan. Lihat daftar' : 'Tidak ada kendala penagihan'" :href="route('dashboard.kendala', $dq)" />
         </div>
@@ -109,7 +111,7 @@
         <section class="card" aria-labelledby="alokasi-rab">
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h2 id="alokasi-rab" class="flex items-center gap-1">Alokasi RAB <x-info-tip label="Alokasi RAB">Pemakaian RAB project Berjalan dan Selesai: Terpakai (BQ disetujui), Pending (BQ diajukan), dan Sisa.</x-info-tip></h2>
+                    <x-section-heading id="alokasi-rab" icon="/invoices">Alokasi RAB <x-info-tip label="Alokasi RAB">Pemakaian RAB project Berjalan dan Selesai: Terpakai (BQ disetujui), Pending (BQ diajukan), dan Sisa.</x-info-tip></x-section-heading>
                     <p class="mt-0.5 text-sm text-slate-600">Dari RAB Perubahan <span class="font-semibold text-slate-900 tabular-nums">{{ Money::format($a['rab']) }}</span> · project berjalan dan selesai</p>
                 </div>
                 <div class="flex items-center gap-3">
@@ -135,7 +137,7 @@
         <section class="card" aria-labelledby="alur-tagihan">
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h2 id="alur-tagihan" class="flex items-center gap-1">Alur tagihan <x-info-tip label="Alur tagihan">Tagihan project Berjalan dan Selesai: Dibayar, Belum Lunas, dan Terencana (belum ditagih).</x-info-tip></h2>
+                    <x-section-heading id="alur-tagihan" icon="/approvals">Alur tagihan <x-info-tip label="Alur tagihan">Tagihan project Berjalan dan Selesai: Dibayar, Belum Lunas, dan Terencana (belum ditagih).</x-info-tip></x-section-heading>
                     <p class="mt-0.5 text-sm text-slate-600">Total nilai tagihan <span class="font-semibold text-slate-900 tabular-nums">{{ Money::format($semua) }}</span> · project berjalan dan selesai</p>
                 </div>
                 <a href="{{ route('dashboard.projects', ['group' => 'open'] + $dq) }}" class="{{ $link }}" aria-label="Lihat project dasar Alur tagihan">Lihat project</a>

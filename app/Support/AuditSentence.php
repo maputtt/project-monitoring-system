@@ -10,6 +10,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\PksStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\Role;
+use App\Enums\SupportTicketStatus;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProjectAdjustmentController;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,7 @@ final class AuditSentence
     private const NOUN = [
         'PROJECT' => 'project', 'PKS' => 'PKS', 'BOUWHEER_CONTACT' => 'kontak Bouwheer', 'TAX_RATE' => 'tarif pajak', 'USER' => 'pengguna',
         'BQ_ITEM' => 'item BQ', 'BQ_MUTATION' => 'relokasi budget', 'PROJECT_ADJUSTMENT' => 'penyesuaian/koreksi', 'INVOICE' => 'invoice',
-        'DOCUMENT' => 'dokumen', 'PROJECT_ASSIGNMENT' => 'penugasan PIC', 'PROGRESS' => 'progres',
+        'DOCUMENT' => 'dokumen', 'PROJECT_ASSIGNMENT' => 'penugasan PIC', 'PROGRESS' => 'progres', 'SUPPORT_TICKET' => 'tiket',
     ];
 
     private const DOC_TYPES = ['NOTA_DISPOSISI' => 'Nota Disposisi', 'BAPP' => 'BAPP', 'BAST' => 'BAST', 'BUKTI_BAYAR' => 'Bukti bayar', 'OTHER' => 'Lainnya'];
@@ -50,6 +51,7 @@ final class AuditSentence
         'DOCUMENT' => ['documents', ['project_id', 'original_filename', 'document_type']],
         'PROJECT_ASSIGNMENT' => ['project_user_assignments', ['project_id', 'user_id']],
         'PROGRESS' => ['project_progress', ['project_id']],
+        'SUPPORT_TICKET' => ['support_tickets', ['title']],
     ];
 
     private const LABELS = [
@@ -68,7 +70,7 @@ final class AuditSentence
         'difference_amount' => 'Selisih', 'invoice_number' => 'Nomor invoice', 'bapp_number' => 'Nomor BAPP', 'bast_number' => 'Nomor BAST', 'billing_date' => 'Tanggal tagih',
         'due_date' => 'Jatuh tempo', 'ppn_rate_snapshot' => 'Tarif PPN', 'pph_rate_snapshot' => 'Tarif PPh', 'dpp_amount' => 'DPP', 'ppn_amount' => 'PPN', 'pph_amount' => 'PPh',
         'subtotal_amount' => 'Subtotal', 'net_received_amount' => 'Diterima bersih', 'tax_type' => 'Jenis pajak', 'rate' => 'Tarif', 'effective_from' => 'Berlaku mulai',
-        'effective_until' => 'Berlaku sampai', 'assignment_role' => 'Peran penugasan', 'original_filename' => 'Nama berkas', 'document_type' => 'Jenis dokumen', 'source_effective_budget' => 'Budget item sumber', 'destination_effective_budget' => 'Budget item tujuan', 'source_sisa' => 'Sisa item sumber', 'status_path' => 'Jalur status', 'stage' => 'Tahap', 'progress_date' => 'Tanggal', 'is_issue' => 'Kendala', 'note' => 'Catatan',
+        'effective_until' => 'Berlaku sampai', 'assignment_role' => 'Peran penugasan', 'original_filename' => 'Nama berkas', 'document_type' => 'Jenis dokumen', 'source_effective_budget' => 'Budget item sumber', 'destination_effective_budget' => 'Budget item tujuan', 'source_sisa' => 'Sisa item sumber', 'status_path' => 'Jalur status', 'stage' => 'Tahap', 'progress_date' => 'Tanggal', 'is_issue' => 'Kendala', 'note' => 'Catatan', 'title' => 'Judul', 'admin_note' => 'Catatan admin', 'page_url' => 'Halaman', 'screenshot_mime' => 'Tangkapan layar',
     ];
 
     /** Kunci internal/bising yang tidak ditampilkan sebagai baris perubahan. */
@@ -137,6 +139,7 @@ final class AuditSentence
         $name = match ($type) {
             'PKS' => $info['pks_number'] ?? null,
             'BOUWHEER_CONTACT', 'USER', 'TAX_RATE' => $info['name'] ?? null,
+            'SUPPORT_TICKET' => $info['title'] ?? null,
             'BQ_ITEM' => $info['item_name'] ?? null,
             'DOCUMENT' => isset($info['original_filename']) ? $info['original_filename'].' ('.(self::DOC_TYPES[$info['document_type'] ?? ''] ?? ($info['document_type'] ?? 'dokumen')).')' : null,
             'PROJECT_ASSIGNMENT' => $info['user_name'] ?? null,
@@ -166,7 +169,7 @@ final class AuditSentence
     {
         $consumed = self::special($action, $type, $before, $after)[1] ?? null;
         // Nama dan nominal yang sudah ada di kalimat tidak diulang pada baris baru (CREATE/SUBMIT).
-        $inSentence = $action === AuditAction::CREATE ? ['name', 'pks_number', 'item_name', 'project_code', 'original_filename'] : [];
+        $inSentence = $action === AuditAction::CREATE ? ['name', 'pks_number', 'item_name', 'project_code', 'original_filename', 'title'] : [];
         if (in_array($action, [AuditAction::CREATE, AuditAction::SUBMIT], true)) {
             $inSentence = [...$inSentence, ...match ($type) {
                 'BQ_MUTATION' => ['amount'], 'PROJECT_ADJUSTMENT' => ['difference_amount', 'adjustment_type'], 'DOCUMENT' => ['document_type'], 'PROGRESS' => ['sequence_number'], default => [],
@@ -216,7 +219,7 @@ final class AuditSentence
             $key === 'workflow_status', $key === 'status_path' => InvoiceStatus::class,
             $key === 'status' => match ($type) {
                 'PROJECT' => ProjectStatus::class, 'PKS' => PksStatus::class, 'BQ_ITEM' => BqStatus::class,
-                'PROJECT_ADJUSTMENT', 'BQ_MUTATION' => ApprovalStatus::class, default => null,
+                'PROJECT_ADJUSTMENT', 'BQ_MUTATION' => ApprovalStatus::class, 'SUPPORT_TICKET' => SupportTicketStatus::class, default => null,
             },
             $key === 'role' => Role::class,
             $key === 'department' => Department::class,

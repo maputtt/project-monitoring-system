@@ -10,7 +10,7 @@ use Illuminate\Testing\TestResponse;
 use RuntimeException;
 use Tests\TestCase;
 
-// Pembatalan termin PLANNED dan skenario closing end-to-end yang dibuka olehnya bersama arsip BQ.
+// Pembatalan termin PLANNED (keputusan user 2026-10-17) dan skenario closing end-to-end yang dibuka olehnya bersama arsip BQ.
 class InvoiceCancelTest extends TestCase
 {
     use RefreshDatabase;
@@ -112,7 +112,7 @@ class InvoiceCancelTest extends TestCase
     {
         $this->post("/invoices/{$this->planned}/cancel", ['reason' => 'x'])->assertRedirect('/login');
         foreach ([
-            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 403],
+            [$this->staff, 403], [User::factory()->role('DIREKSI', null)->create(), 403], [User::factory()->role('SYSTEM_ADMIN', null)->create(), 404], // admin: project di luar jangkauan
             [User::factory()->role('MANAGER_GM', 'CP')->create(), 404], [User::factory()->role('STAFF_PIC', 'CP')->create(), 404],
         ] as [$user, $code]) {
             $this->cancel($user)->assertStatus($code);

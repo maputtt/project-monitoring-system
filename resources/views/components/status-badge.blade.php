@@ -7,11 +7,11 @@
         default => $value,
     });
     $tone = match (true) {
-        str_contains($value, 'REVISION') => 'bg-amber-50 text-amber-800 ring-amber-600/20',
-        str_contains($value, 'SUBMITTED'), $value === 'UPLOADED' => 'bg-blue-50 text-blue-700 ring-blue-600/20',
+        str_contains($value, 'REVISION'), $value === 'NEW' => 'bg-amber-50 text-amber-800 ring-amber-600/20',
+        str_contains($value, 'SUBMITTED'), in_array($value, ['UPLOADED', 'IN_PROGRESS'], true) => 'bg-blue-50 text-blue-700 ring-blue-600/20',
         str_contains($value, 'WAITING') => 'bg-purple-50 text-purple-700 ring-purple-600/20',
         str_contains($value, 'CLOSED') => 'bg-slate-800 text-white ring-slate-900/20',
-        in_array($value, ['PAID', 'APPROVED', 'VERIFIED', 'INVOICE_VERIFIED', 'ACTIVE', 'ACHIEVED', 'COMPLETED'], true) => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+        in_array($value, ['PAID', 'APPROVED', 'VERIFIED', 'INVOICE_VERIFIED', 'ACTIVE', 'ACHIEVED', 'COMPLETED', 'RESOLVED'], true) => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
         in_array($value, ['DELAYED', 'REPLACED', 'CANCELLED', 'REVERSED'], true) => 'bg-rose-50 text-rose-700 ring-rose-600/20',
         $value === 'WITHDRAWN' => 'bg-slate-100 text-slate-600 ring-slate-500/20',
         default => '',

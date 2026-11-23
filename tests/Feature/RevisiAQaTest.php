@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
-// QA independen Revisi A: hitung ulang Target Margin Awal lewat alur nyata (penyesuaian + koreksi), Sisa BQ, kartu, sapuan sisa teks lama, XSS.
+// QA independen Revisi A (keputusan GM 2026-10-22): hitung ulang Target Margin Awal lewat alur nyata (penyesuaian + koreksi), Sisa BQ, kartu, sapuan sisa teks lama, XSS.
 class RevisiAQaTest extends TestCase
 {
     use RefreshDatabase;

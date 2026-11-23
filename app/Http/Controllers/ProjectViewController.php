@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BqStatus;
+use App\Enums\Department;
 use App\Enums\ProjectStatus;
 use App\Enums\Role;
 use App\Models\BouwheerContact;
@@ -26,9 +27,11 @@ class ProjectViewController extends Controller
     {
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:100'], 'status' => ['nullable', Rule::enum(ProjectStatus::class)]]);
         $q = isset($filters['q']) ? addcslashes($filters['q'], '%_\\') : null;
+        $department = DashboardController::department($request); // null untuk peran per-divisi: filter diabaikan
 
         $projects = Project::query()->visibleTo($request->user())
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('projects.status', $status))
+            ->when($department, fn ($query, $d) => $query->where('projects.department', $d))
             ->when($q, fn ($query) => $query->where(fn ($w) => $w
                 ->where('project_code', 'like', "%$q%")->orWhere('project_name', 'like', "%$q%")
                 ->orWhereIn('pks_id', Pks::query()->where('pks_number', 'like', "%$q%")->select('id'))));
@@ -39,7 +42,8 @@ class ProjectViewController extends Controller
             'pks' => $pks,
             'projectsByPks' => $projects->whereIn('pks_id', $pks->pluck('id'))->orderBy('project_code')->get()->groupBy('pks_id'),
             'statuses' => ProjectStatus::cases(),
-            'filters' => $filters,
+            'filters' => $filters + ['department' => $department],
+            'departments' => $request->user()->role->isDivisionScoped() ? null : Department::cases(),
         ]);
     }
 

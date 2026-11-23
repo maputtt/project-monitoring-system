@@ -26,7 +26,7 @@ return new class extends Migration
 
     private function replace(string $table, string $check, string $values): void
     {
-        DB::statement("ALTER TABLE $table DROP CHECK $check");
+        DB::statement("ALTER TABLE $table DROP CONSTRAINT $check");
         DB::statement("ALTER TABLE $table ADD CONSTRAINT $check CHECK (status IN ($values))");
     }
 };

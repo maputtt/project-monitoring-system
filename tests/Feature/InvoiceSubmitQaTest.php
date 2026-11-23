@@ -177,7 +177,7 @@ class InvoiceSubmitQaTest extends TestCase
     public function test_every_role_and_status_renders_the_project_page_without_500(): void
     {
         $id = $this->invoice('100.0000', 1);
-        $users = [$this->staff, User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()];
+        $users = [$this->staff, User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create()];
         foreach (['PLANNED', 'INVOICE_SUBMITTED', 'INVOICE_REVISION_REQUIRED'] as $status) {
             if ($status === 'PLANNED') {
                 $this->submit($id)->assertSessionHasNoErrors();

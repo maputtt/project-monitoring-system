@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Daftar drill-down dari kartu dashboard (Revisi B). Read-only; selalu lewat Project::visibleTo dan filter divisi dashboard.
+ * Daftar drill-down dari kartu dashboard (Revisi GM 2026-10-22 B). Read-only; selalu lewat Project::visibleTo dan filter divisi dashboard.
  * Invoice dan antrean persetujuan memakai halaman yang sudah ada (/invoices, /approvals); di sini hanya daftar yang belum punya halaman.
  */
 class DashboardListController extends Controller
@@ -18,11 +18,12 @@ class DashboardListController extends Controller
 
     /** @var array<string, array{0: string, 1: list<string>, 2: string}> group => [judul, status project, keterangan] */
     public const GROUPS = [
-        'activated' => ['Nilai Project', DashboardController::ACTIVATED, 'Project yang sudah diaktifkan, termasuk yang selesai dan tutup buku. Dasar kartu Nilai Project.'],
+        'activated' => ['Nilai Project', DashboardController::ACTIVATED, 'Project yang sudah diaktifkan, termasuk yang selesai dan tutup buku. Tidak lagi menjadi dasar kartu mana pun.'],
         'active' => ['Project Aktif/Berjalan', ['ACTIVE'], 'Project yang sedang berjalan.'],
         'completed' => ['Project Selesai', ['COMPLETED'], 'Sudah selesai, belum tutup buku.'],
         'prospects' => ['Calon Kontrak', DashboardController::PROSPECT, 'Draf dan menunggu aktivasi; tidak termasuk angka KPI.'],
-        'open' => ['Project Berjalan dan Selesai', DashboardController::OPEN, 'Dasar grafik Alokasi RAB dan Alur Tagihan: belum tutup buku.'],
+        'open' => ['Project Berjalan dan Selesai', DashboardController::OPEN, 'Dasar kartu Total Nilai Project dan Target Margin serta grafik Alokasi RAB dan Alur Tagihan: belum tutup buku.'],
+        'rab_changed' => ['Project Perubahan RAB', DashboardController::OPEN, 'Project berjalan dan selesai yang RAB-nya berbeda dari RAB awal.'],
     ];
 
     private function visible(Request $request, ?string $department)
@@ -36,9 +37,9 @@ class DashboardListController extends Controller
         [$title, $statuses, $hint] = self::GROUPS[$group];
 
         return view('dashboard-lists.projects', [
-            'title' => $title, 'hint' => $hint, 'department' => $department,
-            'projects' => $this->visible($request, $department)->whereIn('projects.status', $statuses)->orderBy('projects.project_code')
-                ->paginate(self::PER_PAGE, ['projects.id', 'projects.project_code', 'projects.project_name', 'projects.department', 'projects.status', 'projects.initial_contract_value', 'projects.effective_rab', 'projects.target_margin_amount'])->withQueryString(),
+            'title' => $title, 'hint' => $hint, 'department' => $department, 'showInitialRab' => $group === 'rab_changed',
+            'projects' => $this->visible($request, $department)->whereIn('projects.status', $statuses)->when($group === 'rab_changed', fn ($q) => $q->whereColumn('projects.effective_rab', '<>', 'projects.initial_rab'))->orderBy('projects.project_code')
+                ->paginate(self::PER_PAGE, ['projects.id', 'projects.project_code', 'projects.project_name', 'projects.department', 'projects.status', 'projects.initial_contract_value', 'projects.initial_rab', 'projects.effective_rab', 'projects.target_margin_amount'])->withQueryString(),
         ]);
     }
 
@@ -69,16 +70,18 @@ class DashboardListController extends Controller
         return view('dashboard-lists.kendala', ['items' => $items, 'department' => $department]);
     }
 
-    /** Margin Realisasi: project tutup buku (FINANCIALLY_CLOSED, atau ARCHIVED yang pernah ditutup) dengan actual_profit_amount; persen tertimbang atas Σ dasar margin. */
+    /** Margin Realisasi: project tutup buku (FINANCIALLY_CLOSED, atau ARCHIVED yang pernah ditutup) dengan actual_profit_amount; persen total = rata-rata biasa % per project (semua halaman, base nol dikeluarkan). */
     public function margin(Request $request): View
     {
         $department = DashboardController::department($request);
         $closed = $this->visible($request, $department)->whereIn('projects.status', DashboardController::CLOSED)->whereNotNull('projects.actual_profit_amount');
         $totals = DB::table('projects')->whereIn('id', (clone $closed)->select('projects.id'))
-            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(initial_contract_value), 0) AS contract, COALESCE(SUM(target_margin_amount), 0) AS target, COALESCE(SUM(actual_profit_amount), 0) AS actual, COALESCE(SUM(margin_base_amount), 0) AS base')->first();
+            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(initial_contract_value), 0) AS contract, COALESCE(SUM(target_margin_amount), 0) AS target, COALESCE(SUM(actual_profit_amount), 0) AS actual')->first();
+        $rows = DB::table('projects')->whereIn('id', (clone $closed)->select('projects.id'))->get(['target_margin_amount', 'actual_profit_amount', 'margin_base_amount']);
 
         return view('dashboard-lists.margin', [
             'totals' => $totals, 'department' => $department,
+            'targetPct' => Money::averagePct($rows, 'target_margin_amount'), 'actualPct' => Money::averagePct($rows, 'actual_profit_amount'),
             'projects' => $closed->orderBy('projects.project_code')
                 ->paginate(self::PER_PAGE, ['projects.id', 'projects.project_code', 'projects.project_name', 'projects.department', 'projects.status', 'projects.initial_contract_value', 'projects.margin_base_amount', 'projects.target_margin_amount', 'projects.actual_profit_amount'])->withQueryString(),
         ]);

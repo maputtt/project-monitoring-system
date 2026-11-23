@@ -8,6 +8,7 @@ use App\Enums\ProjectStatus;
 use App\Exceptions\InvalidTransition;
 use App\Models\Project;
 use App\Support\Audit;
+use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -28,6 +29,7 @@ class InvoiceWorkflowController extends Controller
         [$project] = $this->load($request, $invoice);
 
         $this->decide($project, $invoice, $request->user()->id, null);
+        Notify::send('decided', $project, $request->user(), $project->project_code.': invoice diverifikasi');
 
         return redirect()->route('projects.show', $project)->with('status', 'Invoice diverifikasi. Menunggu bukti pembayaran.');
     }
@@ -38,6 +40,7 @@ class InvoiceWorkflowController extends Controller
         $reason = $request->validate(['reason' => ['required', 'string', 'max:1000']], ['reason.required' => 'Alasan revisi wajib diisi.', 'reason.string' => 'Alasan revisi tidak valid.', 'reason.max' => 'Alasan revisi maksimal :max karakter.'])['reason'];
 
         $this->decide($project, $invoice, $request->user()->id, $reason);
+        Notify::send('decided', $project, $request->user(), $project->project_code.': invoice perlu revisi');
 
         return redirect()->route('projects.show', $project)->with('status', 'Invoice dikembalikan untuk direvisi.');
     }
@@ -70,6 +73,8 @@ class InvoiceWorkflowController extends Controller
             Audit::record(AuditAction::APPROVE, 'INVOICE', $invoice, Arr::only((array) $row, self::AUDITED), Arr::only($after, self::AUDITED) + ['document_id' => $doc->id]);
             Audit::record(AuditAction::LOCK, 'INVOICE', $invoice, Arr::only((array) $row, ['locked_at', 'locked_by']), Arr::only($after, ['workflow_status', 'locked_at', 'locked_by']));
         });
+
+        Notify::send('decided', $project, $request->user(), $project->project_code.': pembayaran invoice disetujui');
 
         return redirect()->route('projects.show', $project)->with('status', 'Pembayaran disetujui. Invoice '.InvoiceStatus::PAID->label().' dan terkunci.');
     }
@@ -104,6 +109,8 @@ class InvoiceWorkflowController extends Controller
             $keys = [...self::AUDITED, 'locked_at', 'locked_by', 'unlocked_at', 'unlocked_by', 'unlock_reason'];
             Audit::record(AuditAction::UNLOCK, 'INVOICE', $invoice, Arr::only((array) $row, $keys), Arr::only((array) DB::table('invoices')->where('id', $invoice)->first(), $keys), $reason);
         });
+
+        Notify::send('decided', $project, $request->user(), $project->project_code.': invoice dibuka kuncinya, perlu revisi pembayaran'); // keputusan PM 2026-11-16
 
         return redirect()->route('projects.show', $project)->with('status', 'Kunci invoice dibuka. Invoice kembali ke tahap revisi pembayaran.');
     }

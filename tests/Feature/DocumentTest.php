@@ -101,7 +101,7 @@ class DocumentTest extends TestCase
         $this->upload(user: User::factory()->role('STAFF_PIC', 'CP')->create())->assertNotFound();
         $this->upload(user: User::factory()->role('MANAGER_GM', 'BM')->create())->assertForbidden();
         $this->upload(user: User::factory()->role('DIREKSI', null)->create())->assertForbidden();
-        $this->upload(user: User::factory()->role('SYSTEM_ADMIN', null)->create())->assertForbidden();
+        $this->upload(user: User::factory()->role('SYSTEM_ADMIN', null)->create())->assertNotFound(); // admin: project di luar jangkauan
         $this->assertSame(0, DB::table('documents')->count());
     }
 
@@ -117,12 +117,18 @@ class DocumentTest extends TestCase
         $doc = $this->uploaded();
         $url = $this->signed($doc->id);
 
-        foreach ([$this->staff, User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create(), User::factory()->role('SYSTEM_ADMIN', null)->create()] as $user) {
+        foreach ([$this->staff, User::factory()->role('MANAGER_GM', 'BM')->create(), User::factory()->role('DIREKSI', null)->create()] as $user) {
             $response = $this->actingAs($user)->get($url)->assertOk();
             $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
             $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
             $this->assertStringContainsString('Laporan Asli.pdf', $response->headers->get('Content-Disposition'));
         }
+    }
+
+    public function test_system_admin_cannot_open_a_document(): void
+    {
+        $doc = $this->uploaded();
+        $this->actingAs(User::factory()->role('SYSTEM_ADMIN', null)->create())->get("/documents/{$doc->id}/open")->assertNotFound();
     }
 
     public function test_unsigned_tampered_or_expired_url_is_forbidden(): void

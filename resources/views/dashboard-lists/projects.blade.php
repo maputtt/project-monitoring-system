@@ -26,7 +26,7 @@
                             </div>
                             <dl class="contents text-sm">
                                 <div class="grid grid-cols-[1fr_auto] items-baseline gap-2 lg:block"><dt class="text-xs text-slate-600">Nilai Project</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($project->initial_contract_value) }}</dd></div>
-                                <div class="grid grid-cols-[1fr_auto] items-baseline gap-2 lg:block"><dt class="text-xs text-slate-600">RAB Perubahan</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($project->effective_rab) }}</dd></div>
+                                <div class="grid grid-cols-[1fr_auto] items-baseline gap-2 lg:block"><dt class="text-xs text-slate-600">RAB Perubahan</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($project->effective_rab) }}@if ($showInitialRab)<span class="block text-xs font-normal text-slate-600">RAB awal {{ Money::format($project->initial_rab) }}</span>@endif</dd></div>
                                 <div class="grid grid-cols-[1fr_auto] items-baseline gap-2 lg:block"><dt class="text-xs text-slate-600">Target Margin</dt><dd class="font-semibold text-slate-900 tabular-nums">{{ Money::format($project->target_margin_amount) }}</dd></div>
                             </dl>
                         </div>

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-// QA kartu Sisa RAB: kartu "Sisa RAB" = RAB Perubahan - Σ Nilai RAB item BQ non-ARCHIVED, bergerak nyata; kartu "Total Nilai BQ"; halaman cetak sama.
+// QA keputusan PM 2026-11-02: kartu "Sisa RAB" = RAB Perubahan - Σ Nilai RAB item BQ non-ARCHIVED, bergerak nyata; kartu "Total Nilai BQ"; halaman cetak sama.
 class SisaRabCardQaTest extends TestCase
 {
     use RefreshDatabase;

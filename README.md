@@ -30,7 +30,13 @@ A project and financial monitoring web app for a building-management division. I
 - **Human-readable audit log**: every material change is recorded and rendered as a sentence with before/after values.
 - **Role-based access**, enforced server-side: Staff/PIC and Manager/GM (scoped to their own division), Directors (read-only), System Admin.
 - **Popup CRUD forms** and a **per-project A4 PDF export** (browser print, no PDF library).
-- **Mobile-first responsive UI**; financial operations are online-only. (An installable PWA manifest and service worker are on the backlog, not yet implemented.)
+- **System Admin dashboard**: users online/offline, last login, and a request-performance chart. The admin has no access to financial or project data.
+- **Support tickets** ("Laporkan Masalah"): any user can report a problem with an optional screenshot; the admin handles it.
+- **Notifications**: in-app bell plus PWA web push. Recipients are strictly scoped by division and assignment; email is a fallback only when the user has no push device.
+- **Face ID / fingerprint phone unlock** via passkeys (WebAuthn, no extra dependency). The app locks after 60 minutes idle; a device login lasts at most 30 days.
+- **60-minute idle session** and **extended billing-progress stages**.
+- **Invoice tax rounding**: the last termin absorbs the cumulative rounding difference, so invoice totals equal the contract value.
+- **Mobile-first responsive UI** and an installable PWA (`public/manifest.webmanifest` and a push-only service worker, `public/sw.js`, with no offline cache). Financial operations stay online-only.
 - **No hard delete** of financial transactions, historical documents, or audit logs.
 
 ## Project lifecycle
@@ -52,7 +58,7 @@ The financial baseline is locked from Active onward. Later changes go through bu
 
 ## Tech stack
 
-Laravel 13, PHP 8.4, MySQL 8, Blade, Alpine.js, Tailwind CSS v4, Vite. A server-rendered monolith, with no separate SPA or API layer. 700+ feature and unit tests (PHPUnit, run against MySQL).
+Laravel 13, PHP 8.4, MySQL 8, Blade, Alpine.js, Tailwind CSS v4, Vite. A server-rendered monolith, with no separate SPA or API layer. 860+ feature and unit tests (PHPUnit, run against MySQL).
 
 ## Getting started
 
@@ -71,7 +77,16 @@ npm run build
 php artisan serve
 ```
 
-Demo accounts (seeded, password `password`; the seeder creates users and tax rates only, no sample projects):
+Optional configuration in `.env`:
+
+- **Web push**: set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (for example a `mailto:` address). Generate the key pair with:
+  ```bash
+  php -r "require 'vendor/autoload.php'; print_r(Minishlink\WebPush\VAPID::createVapidKeys());"
+  ```
+- **Passkeys** (Face ID / fingerprint unlock) need HTTPS or `localhost`, and `APP_URL` must match the origin you open in the browser.
+- **`SEED_PASSWORD`** (minimum 12 characters) is required to seed outside the `local`/`testing` environments; seeding fails without it.
+
+Demo accounts (seeded, password `password` in `local`/`testing`, otherwise `SEED_PASSWORD`; the seeder creates users and tax rates only, no sample projects):
 
 | Email | Role |
 |---|---|

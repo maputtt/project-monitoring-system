@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Department;
+use App\Enums\Role;
 use App\Models\Project;
 use App\Support\Money;
 use Illuminate\Http\Request;
@@ -12,27 +13,27 @@ use Illuminate\View\View;
 
 /**
  * Dashboard per role (DSH-01, AC-23). Read-only; semua angka dihitung dari Project::visibleTo.
- * STAFF_PIC dan MANAGER_GM terkunci pada divisinya (?department diabaikan); DIREKSI dan SYSTEM_ADMIN boleh memfilter satu divisi.
+ * STAFF_PIC dan MANAGER_GM terkunci pada divisinya (?department diabaikan); DIREKSI boleh memfilter satu divisi. SYSTEM_ADMIN hanya mendapat dashboard-admin tanpa angka finansial.
  * Kartu dan grafik menaut ke daftar: halaman yang sudah ada (invoice, approvals) atau DashboardListController.
  */
 class DashboardController extends Controller
 {
-    /** Invoice outstanding = tagihan yang sudah dihitung pajaknya (subtotal) tetapi belum PAID/CANCELLED; PLANNED belum punya subtotal. */
+    /** Invoice outstanding (batang Alur Tagihan) = tagihan yang sudah dihitung pajaknya (subtotal) tetapi belum PAID/CANCELLED; PLANNED belum punya subtotal. */
     private const SETTLED = ['PAID', 'CANCELLED'];
 
-    /** Aturan 6A: DRAFT, SUBMITTED, dan CANCELLED tidak masuk angka KPI. */
+    /** Keputusan 6A: DRAFT, SUBMITTED, dan CANCELLED tidak masuk angka KPI. */
     public const ACTIVATED = ['ACTIVE', 'COMPLETED', 'FINANCIALLY_CLOSED', 'ARCHIVED'];
 
     /** Calon kontrak: project yang belum diaktifkan dan belum dibatalkan. */
     public const PROSPECT = ['DRAFT', 'SUBMITTED'];
 
-    /** Revisi B: grafik hanya project yang masih berjalan (belum tutup buku). */
+    /** Revisi GM 2026-10-22 (B): grafik hanya project yang masih berjalan (belum tutup buku). Sejak 2026-11-16 juga dasar kartu Total Nilai Project. */
     public const OPEN = ['ACTIVE', 'COMPLETED'];
 
-    /** Margin Realisasi: project yang sudah tutup buku (ARCHIVED hanya bila pernah ditutup, yaitu actual_profit_amount terisi). */
+    /** Margin Realisasi dan Total Nilai Project Tutup Buku: project yang sudah tutup buku (ARCHIVED hanya bila pernah ditutup, yaitu actual_profit_amount terisi). */
     public const CLOSED = ['FINANCIALLY_CLOSED', 'ARCHIVED'];
 
-    /** Divisi yang dipilih: peran terkunci divisi mengabaikan ?department; DIREKSI dan SYSTEM_ADMIN boleh memfilter satu divisi. Dipakai juga oleh daftar drill-down. */
+    /** Divisi yang dipilih: peran terkunci divisi mengabaikan ?department; DIREKSI boleh memfilter satu divisi. Dipakai juga oleh daftar drill-down. */
     public static function department(Request $request): ?string
     {
         return $request->user()->role->isDivisionScoped() ? null : $request->validate(['department' => ['nullable', Rule::enum(Department::class)]])['department'] ?? null;
@@ -41,6 +42,9 @@ class DashboardController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
+        if ($user->role === Role::SYSTEM_ADMIN) {
+            return app(AdminDashboardController::class)(); // tanpa query project: tidak ada angka finansial untuk admin
+        }
         $department = self::department($request);
 
         $visible = Project::query()->visibleTo($user)->when($department, fn ($q, $d) => $q->where('projects.department', $d));
@@ -49,16 +53,20 @@ class DashboardController extends Controller
         $openIds = (clone $visible)->whereIn('projects.status', self::OPEN)->select('projects.id'); // grafik: hanya yang masih berjalan
 
         $p = DB::table('projects')->whereIn('id', $ids)
-            ->selectRaw("COUNT(*) AS n, COALESCE(SUM(status = 'ACTIVE'), 0) AS active, COALESCE(SUM(status = 'COMPLETED'), 0) AS completed, COALESCE(SUM(initial_contract_value), 0) AS contract, COALESCE(SUM(effective_rab), 0) AS rab, COALESCE(SUM(target_margin_amount), 0) AS margin, COALESCE(SUM(margin_base_amount), 0) AS base")->first();
-        $realized = DB::table('projects')->whereIn('id', (clone $visible)->whereIn('projects.status', self::CLOSED)->whereNotNull('projects.actual_profit_amount')->select('projects.id'))
-            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(actual_profit_amount), 0) AS profit, COALESCE(SUM(margin_base_amount), 0) AS base')->first();
+            ->selectRaw("COUNT(*) AS n, COALESCE(SUM(status = 'ACTIVE'), 0) AS active, COALESCE(SUM(status = 'COMPLETED'), 0) AS completed, COALESCE(SUM(margin_base_amount), 0) AS base")->first();
+        // Total Nilai Project, Target Margin, dan Project Perubahan RAB: hanya project berjalan dan selesai (keputusan PM 2026-11-16); yang sudah tutup buku punya kartu sendiri.
+        $open = DB::table('projects')->whereIn('id', $openIds)->selectRaw('COUNT(*) AS n, COALESCE(SUM(initial_contract_value), 0) AS contract, COALESCE(SUM(target_margin_amount), 0) AS margin, COALESCE(SUM(effective_rab <> initial_rab), 0) AS rab_changed')->first();
+        $closedIds = (clone $visible)->whereIn('projects.status', self::CLOSED)->whereNotNull('projects.actual_profit_amount')->select('projects.id');
+        $realized = DB::table('projects')->whereIn('id', $closedIds)
+            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(actual_profit_amount), 0) AS profit, COALESCE(SUM(initial_contract_value), 0) AS contract')->first();
         // Calon kontrak: DRAFT dan SUBMITTED (CANCELLED tidak); sengaja di luar $ids dan KPI di atas, yang hanya menghitung project teraktivasi.
         $prospects = (clone $visible)->whereIn('projects.status', self::PROSPECT)->toBase()->selectRaw('COUNT(*) AS n, COALESCE(SUM(projects.initial_contract_value), 0) AS total')->first();
         $today = now(config('app.local_timezone'))->toDateString();
         $settled = "'".implode("','", self::SETTLED)."'";
         $outstandingSql = "COALESCE(SUM(CASE WHEN workflow_status NOT IN ($settled) THEN subtotal_amount END), 0) AS outstanding";
-        $kpiInvoices = DB::table('invoices')->whereIn('project_id', $ids)
-            ->selectRaw("$outstandingSql, COALESCE(SUM(CASE WHEN workflow_status = 'PAID' THEN net_received_amount END), 0) AS nett")->first();
+        $notOverdue = "'".implode("','", InvoiceController::NOT_OVERDUE)."'"; // sama dengan /invoices?outstanding=1
+        $outstandingCount = DB::table('invoices')->whereIn('project_id', $ids)
+            ->selectRaw("COALESCE(SUM(workflow_status NOT IN ($notOverdue)), 0) AS outstanding_count")->value('outstanding_count');
         $i = DB::table('invoices')->whereIn('project_id', $openIds)
             ->selectRaw("$outstandingSql, COALESCE(SUM(CASE WHEN workflow_status = 'PAID' THEN subtotal_amount END), 0) AS paid, COALESCE(SUM(CASE WHEN workflow_status = 'PLANNED' THEN planned_amount END), 0) AS planned")->first();
 
@@ -82,15 +90,16 @@ class DashboardController extends Controller
                 'activated' => (int) $p->n,
                 'projects' => (int) $p->active,
                 'completed' => (int) $p->completed,
-                'contract' => Money::add($p->contract),
-                'rab' => Money::add($p->rab),
-                'margin' => Money::add($p->margin),
-                'margin_pct' => Money::ratioPct($p->margin, $p->base, 2), // rata-rata tertimbang: Σ target margin / Σ dasar margin
-                'outstanding' => Money::add($kpiInvoices->outstanding),
-                'nett' => Money::add($kpiInvoices->nett),
+                'open_count' => (int) $open->n,
+                'contract' => Money::add($open->contract),
+                'closed_contract' => Money::add($realized->contract),
+                'rab_changed' => (int) $open->rab_changed, // jumlah project berjalan/selesai yang RAB efektifnya berbeda dari RAB awal; daftar: /dashboard/projects/rab_changed
+                'margin' => Money::add($open->margin),
+                'margin_pct' => Money::averagePct(DB::table('projects')->whereIn('id', $openIds)->get(['target_margin_amount', 'margin_base_amount']), 'target_margin_amount'), // rata-rata biasa % per project (base nol dikeluarkan)
+                'outstanding_count' => (int) $outstandingCount,
                 'realized_count' => (int) $realized->n,
                 'realized' => Money::add($realized->profit),
-                'realized_pct' => Money::ratioPct($realized->profit, $realized->base, 2),
+                'realized_pct' => Money::averagePct(DB::table('projects')->whereIn('id', $closedIds)->get(['actual_profit_amount', 'margin_base_amount']), 'actual_profit_amount'),
                 'overbudget' => DB::table('bq_items')->whereIn('project_id', $ids)->where('is_overbudget', true)->where('status', '<>', 'ARCHIVED')->count(),
                 'pending' => $pending,
             ],

@@ -17,6 +17,7 @@
             <select name="stage" required class="inp" @if ($failed && $bagErrors->has('stage')) aria-invalid="true" aria-describedby="e-{{ $bag }}-stage" @endif>
                 <option value="">Pilih tahap</option>
                 @foreach (\App\Http\Controllers\InvoiceController::PROGRESS_STAGES as $code => $label)
+                    @continue(in_array($code, \App\Http\Controllers\InvoiceController::RETIRED_PROGRESS_STAGES, true))
                     <option value="{{ $code }}" @selected($oldString('stage') === $code)>{{ $label }}</option>
                 @endforeach
             </select>
